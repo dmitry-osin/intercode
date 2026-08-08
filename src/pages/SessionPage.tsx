@@ -28,6 +28,16 @@ import { useTelemetryFeed } from "@/telemetry/feed";
 import { ParticipantsBar } from "@/ui/ParticipantsBar";
 import { RoleGuard } from "@/ui/RoleGuard";
 import { TelemetryPanel } from "@/ui/TelemetryPanel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -87,7 +97,10 @@ export default function SessionPage({ id }: { id: string }) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [editorView, setEditorView] = useState<EditorView | null>(null);
   const [error, setError] = useState<{ title: string; message: string } | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const editCountRef = useRef(loadEditCount(id));
+  const editorKeyRef = useRef(0);
 
   const readOnly = useMemo(() => (role ? !canEdit(role) : true), [role]);
   const interviewer = role === "interviewer";
@@ -122,6 +135,11 @@ export default function SessionPage({ id }: { id: string }) {
             setMeta(nextMeta);
             setLanguage(nextMeta.language);
             saveSessionMeta(nextMeta);
+            if (nextMeta.status === "ended") {
+              // Завершение пришло с сервера: блокируем редактор для всех ролей.
+              editorKeyRef.current += 1;
+              setSessionEnded(true);
+            }
           }),
         );
         if (canSeeTelemetry(role)) {
@@ -182,13 +200,13 @@ export default function SessionPage({ id }: { id: string }) {
   const finalCode = () => editorView?.state.doc.toString() ?? loadFinalCode(id);
 
   const copyFinalCode = async () => {
-    await copyText(finalCode());
-    toast.success(t("room.codeCopied"));
+    const ok = await copyText(finalCode());
+    if (ok) toast.success(t("room.codeCopied"));
+    else toast.error(t("common.copyFailed"));
   };
 
   const closeSession = () => {
     if (!collab || !meta || !canControlRoom(collab.role)) return;
-    if (!window.confirm(t("room.closeConfirm"))) return;
     const closedMeta = { ...meta, closedAt: Date.now(), status: "ended" as const };
     saveFinalCode(id, finalCode());
     saveSessionMeta(closedMeta);
@@ -261,7 +279,7 @@ export default function SessionPage({ id }: { id: string }) {
                   <Download className="h-4 w-4" />
                   {t("common.export")}
                 </Button>
-                <Button variant="destructive" onClick={closeSession}>
+                <Button variant="destructive" onClick={() => setConfirmClose(true)}>
                   <DoorOpen className="h-4 w-4" />
                   {t("common.close")}
                 </Button>
@@ -304,10 +322,11 @@ export default function SessionPage({ id }: { id: string }) {
             </CardHeader>
             <CardContent className="p-0">
               <CodeEditor
+                key={editorKeyRef.current}
                 collab={collab}
                 language={language}
                 theme={theme}
-                readOnly={readOnly}
+                readOnly={readOnly || sessionEnded}
                 indent={indent}
                 onReady={handleEditorReady}
                 onDocChange={handleDocChange}
@@ -335,6 +354,45 @@ export default function SessionPage({ id }: { id: string }) {
           </aside>
         </section>
       </div>
+
+      {/* Подтверждение завершения сессии — popup в стиле приложения */}
+      <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("room.closeDialog.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("room.closeDialog.desc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={closeSession}
+            >
+              {t("common.close")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Уведомление о завершении сессии для всех участников */}
+      <AlertDialog open={sessionEnded}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("room.sessionEnded.title")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("room.sessionEnded.message")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {interviewer && (
+              <AlertDialogCancel onClick={() => navigate(`/export/${id}`)}>
+                {t("room.sessionEnded.toExport")}
+              </AlertDialogCancel>
+            )}
+            <AlertDialogAction onClick={() => setSessionEnded(false)}>
+              {t("common.ok")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   );
 }

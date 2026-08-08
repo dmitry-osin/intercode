@@ -52,7 +52,11 @@ export default function LobbyPage({ id }: { id: string }) {
   }
 
   const copyRole = async (role: Role) => {
-    await copyText(links[role]);
+    const ok = await copyText(links[role]);
+    if (!ok) {
+      toast.error(t("common.copyFailed"));
+      return;
+    }
     setCopiedRole(role);
     toast.success(t("lobby.linkCopied", { role: t(`role.${role}.short`) }));
     window.setTimeout(() => setCopiedRole(null), 1200);
@@ -118,9 +122,6 @@ export default function LobbyPage({ id }: { id: string }) {
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-3">
               {qr ? <img src={qr} alt={t("lobby.qr.alt")} className="rounded-xl border bg-white p-2" /> : <div className="h-[220px] w-[220px] animate-pulse rounded-xl bg-muted" />}
-              <p className="text-center text-xs text-muted-foreground">
-                {t("lobby.qr.hint")}
-              </p>
             </CardContent>
           </Card>
         </section>

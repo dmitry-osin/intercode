@@ -106,7 +106,11 @@ export default function ExportPage({ id }: { id: string }) {
   const snapshotJson = JSON.stringify(snapshot, null, 2);
 
   const copyFinal = async () => {
-    await copyText(snapshot.code.final);
+    const ok = await copyText(snapshot.code.final);
+    if (!ok) {
+      toast.error(t("common.copyFailed"));
+      return;
+    }
     setCopied(true);
     toast.success(t("export.finalCopied"));
     window.setTimeout(() => setCopied(false), 1200);

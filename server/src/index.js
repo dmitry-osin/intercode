@@ -196,6 +196,10 @@ async function handleApi(req, res, url) {
       Object.assign(meta, patch);
       await store.saveSessionMeta(meta);
       manager.applyMetaPatch(id, patch);
+      if (patch.status === "ended") {
+        // Явно сообщаем подключённым участникам о завершении до reject'а новых входов.
+        manager.rooms.get(id)?.broadcastSessionEnded();
+      }
       sendJson(res, 200, meta);
       return;
     }

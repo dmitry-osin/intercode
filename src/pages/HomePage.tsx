@@ -16,7 +16,7 @@ import { languageIds, languageLabels, starterCode, type LanguageId } from "@/edi
 import { randomId } from "@/lib/id";
 import { createServerSession, probeServerApi } from "@/collab/api";
 import { loadRoleName, saveDisplayName, saveRoleName, saveSessionMeta } from "@/session/store";
-import { defaultAiPromptText, type RoomConfig, type SessionMeta } from "@/types";
+import { defaultAiPromptFor, type RoomConfig, type SessionMeta } from "@/types";
 
 /** Название сессии по умолчанию: дата и время создания (формат текущей локали). */
 function generatedSessionTitle(locale: string): string {
@@ -37,7 +37,7 @@ export default function HomePage() {
   const [clipboardObfuscation, setClipboardObfuscation] = useState(false);
   const [clipboardCorruption, setClipboardCorruption] = useState(false);
   const [aiPromptInjection, setAiPromptInjection] = useState(false);
-  const [aiPromptText, setAiPromptText] = useState(defaultAiPromptText);
+  const [aiPromptText, setAiPromptText] = useState(() => defaultAiPromptFor(locale));
   const [devtoolsHeuristics, setDevtoolsHeuristics] = useState(false);
 
   const createSession = async () => {
@@ -46,7 +46,7 @@ export default function HomePage() {
       clipboardObfuscation,
       clipboardCorruption,
       aiPromptInjection,
-      aiPromptText: aiPromptText.trim() || defaultAiPromptText,
+      aiPromptText: aiPromptText.trim() || defaultAiPromptFor(locale),
       pasteThresholdAlert: 50,
       devtoolsHeuristics,
     };

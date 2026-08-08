@@ -117,7 +117,7 @@ export class Room {
   }
 
   addConnection(ws, { clientId, role, name }) {
-    const conn = { clientId, role, name, alive: true };
+    const conn = { clientId, role, name, alive: true, local: true };
     this.conns.set(ws, conn);
     this.idleSince = null;
 
@@ -311,12 +311,21 @@ export class Room {
       case MESSAGE_SYNC: {
         encoding.writeVarUint(encoder, MESSAGE_SYNC);
         if (conn.role === "viewer") {
-          // Read-only (§5 ТЗ): от наблюдателя принимаем только SyncStep1,
-          // апдейты документа отбрасываем.
+          // Read-only (§5 ТЗ): от наблюдателя принимаем только SyncStep1
+          // (запрос состояния) и SyncStep2 (ответ на наш запрос — безопасно:
+          // его содержимое определяет сервер). Произвольные update отбрасываем.
           const syncType = decoding.readVarUint(decoder);
           if (syncType === syncProtocol.messageYjsSyncStep1) {
-            encoding.writeVarUint(encoder, syncType);
+            // ВАЖНО: syncType в ответ НЕ пишем — readSyncStep1 сам
+            // сериализует исходящий SyncStep2 (writeSyncStep2 пишет свой
+            // messageYjsSyncStep2). Эхо входящего syncType давало бы
+            // кадр [SYNC][Step1][Step2][…], который клиент разбирает
+            // как SyncStep1 и применяет мусор вместо состояния документа.
             syncProtocol.readSyncStep1(decoder, encoder, this.doc);
+          } else if (syncType === syncProtocol.messageYjsSyncStep2) {
+            // readSyncStep2(decoder, doc, transactionOrigin): encoder здесь не нужен,
+            // ответ на SyncStep2 не положен.
+            syncProtocol.readSyncStep2(decoder, this.doc, conn);
           }
         } else {
           syncProtocol.readSyncMessage(decoder, encoder, this.doc, conn);
@@ -357,6 +366,11 @@ export class Room {
   async persistNow() {
     await this.flushTelemetry();
     await this.store.saveDocState(this.id, Y.encodeStateAsUpdate(this.doc));
+  }
+
+  /** Уведомить всех участников о завершении сессии до разрыва соединений. */
+  broadcastSessionEnded() {
+    broadcastJson(this, { type: "session_ended", endedAt: Date.now() }, () => true);
   }
 
   async dispose() {

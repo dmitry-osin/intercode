@@ -212,6 +212,18 @@ export class CollabSession {
     this.channel?.postMessage({ kind: "telemetry", event: enriched, sender: this.clientId } satisfies LocalMessage);
   }
 
+  /** Сессия завершена организатором (сообщение сервера) или локально. */
+  endSession(): void {
+    if (this.closed) return;
+    this.meta.status = "ended";
+    this.closed = true;
+    // Сначала финальный статус/мета для обработчиков UI, затем разборка сокета.
+    this.setStatus({ ...this.status, connected: false });
+    this.emitMeta(this.meta);
+    this.awareness.setLocalState(null);
+    this.teardownServerSocket();
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -440,6 +452,11 @@ export class CollabSession {
           if (patch.status) this.meta.status = patch.status;
           this.emitMeta(this.meta);
         }
+        break;
+      }
+      case "session_ended": {
+        // Сервер сообщил: интервьюер завершил сессию — закрываемся у всех ролей.
+        this.endSession();
         break;
       }
       case "pong":
