@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { useI18n } from "@/app/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
@@ -9,6 +10,7 @@ interface RoleGuardProps {
 }
 
 export function RoleGuard({ title, message }: RoleGuardProps) {
+  const { t } = useI18n();
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl items-center justify-center p-6">
       <Card className="w-full">
@@ -21,7 +23,7 @@ export function RoleGuard({ title, message }: RoleGuardProps) {
         </CardHeader>
         <CardContent>
           <Button asChild>
-            <Link href="/">На главную</Link>
+            <Link href="/">{t("common.home")}</Link>
           </Button>
         </CardContent>
       </Card>

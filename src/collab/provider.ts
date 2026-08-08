@@ -11,10 +11,10 @@ import {
 import { loadSessionMeta, saveSessionMeta } from "@/session/store";
 import { randomId, uuid } from "@/lib/id";
 import { defaultRoomConfig, type Role, type SessionMeta, type TelemetryEvent } from "@/types";
-import { codeFromRole, colorForClient, validateToken } from "./roles";
+import { colorForClient, validateToken } from "./roles";
 import { fetchServerSession, probeServerApi, serverWsUrl, SessionFetchError } from "./api";
 
-export type TransportMode = "local" | "partykit" | "server";
+export type TransportMode = "local" | "server";
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
@@ -72,8 +72,6 @@ export class CollabSession {
   private readonly meta: SessionMeta;
   private mode: TransportMode = "local";
   private channel: BroadcastChannel | null = null;
-  private partyProvider: { destroy: () => void } | null = null;
-  private partySocket: { close: () => void; send: (data: string) => void; readyState: number } | null = null;
   private serverSocket: WebSocket | null = null;
   private serverReconnectTimer: number | null = null;
   private serverRetries = 0;
@@ -98,13 +96,10 @@ export class CollabSession {
   }
 
   static async create(options: CreateCollabOptions): Promise<CollabSession> {
-    const host = import.meta.env.VITE_PARTYKIT_HOST?.trim();
     let meta = loadSessionMeta(options.sessionId);
     let mode: TransportMode = "local";
 
-    if (host) {
-      mode = "partykit";
-    } else if (await probeServerApi()) {
+    if (await probeServerApi()) {
       // Server-режим (self-hosted): мету и права проверяет сервер по токену.
       mode = "server";
       try {
@@ -133,13 +128,13 @@ export class CollabSession {
                 : "Сервер недоступен. Попробуйте позже.",
           );
         }
-        throw new CollabError("transport", "Не удалось связаться с сервером InterCode");
+        throw new CollabError("transport", "Не удалось связаться с сервером IntQst");
       }
     } else {
       if (!meta) {
         throw new CollabError(
           "not_found",
-          "Сессия не найдена в этом браузере. Для демо откройте ссылку из лобби на этой же машине или задайте VITE_PARTYKIT_HOST.",
+          "Сессия не найдена в этом браузере. Для демо откройте ссылку из лобби на этой же машине.",
         );
       }
       if (!validateToken(meta, options.role, options.token)) {
@@ -149,7 +144,7 @@ export class CollabSession {
 
     meta ??= {
       id: options.sessionId,
-      title: "InterCode session",
+      title: "IntQst session",
       createdAt: Date.now(),
       closedAt: null,
       language: "typescript",
@@ -160,8 +155,7 @@ export class CollabSession {
     };
 
     const session = new CollabSession(options, meta);
-    if (mode === "partykit") await session.connectPartyKit(host as string);
-    else if (mode === "server") session.connectServer();
+    if (mode === "server") session.connectServer();
     else session.connectLocal();
     return session;
   }
@@ -207,11 +201,6 @@ export class CollabSession {
 
   sendTelemetry(event: TelemetryEvent): void {
     const enriched = { ...event, srvTs: event.srvTs ?? Date.now() };
-    if (this.mode === "partykit" && this.partySocket) {
-      if (this.partySocket.readyState !== WebSocket.OPEN) throw new Error("PartyKit socket is not open");
-      this.partySocket.send(JSON.stringify({ t: "tel", event: enriched }));
-      return;
-    }
     if (this.mode === "server") {
       if (!this.serverSocket || this.serverSocket.readyState !== WebSocket.OPEN) {
         throw new Error("Server socket is not open");
@@ -239,8 +228,6 @@ export class CollabSession {
       this.channel.postMessage({ kind: "awareness-leave", clients: [this.doc.clientID], sender: this.clientId } satisfies LocalMessage);
       this.channel.close();
     }
-    this.partyProvider?.destroy();
-    this.partySocket?.close();
     this.teardownServerSocket();
     this.doc.destroy();
     this.setStatus({ ...this.status, connected: false });
@@ -249,7 +236,7 @@ export class CollabSession {
   private connectLocal(): void {
     this.mode = "local";
     this.setStatus({ connected: true, mode: "local", error: null });
-    this.channel = new BroadcastChannel(`intercode-room-${this.sessionId}`);
+    this.channel = new BroadcastChannel(`intqst-room-${this.sessionId}`);
     this.channel.onmessage = (message: MessageEvent<LocalMessage>) => this.handleLocalMessage(message.data);
 
     this.doc.on("update", (update: Uint8Array, origin: unknown) => {
@@ -276,54 +263,6 @@ export class CollabSession {
     }, 180);
 
     window.addEventListener("beforeunload", this.beforeUnload);
-  }
-
-  private async connectPartyKit(host: string): Promise<void> {
-    this.mode = "partykit";
-    this.setStatus({ connected: false, mode: "partykit", error: null });
-    try {
-      const [{ default: YPartyKitProvider }, { PartySocket }] = await Promise.all([
-        import("y-partykit/provider"),
-        import("partysocket"),
-      ]);
-      const normalizedHost = host.replace(/^https?:\/\//, "").replace(/\/$/, "");
-      const provider = new YPartyKitProvider(normalizedHost, this.sessionId, this.doc, {
-        awareness: this.awareness,
-        params: { r: codeFromRole(this.role), k: this.token },
-      });
-      this.partyProvider = provider;
-      provider.on("status", ({ connected }: { connected: boolean }) => {
-        this.setStatus({ connected, mode: "partykit", error: null });
-      });
-
-      const socket = new PartySocket({
-        host: normalizedHost,
-        room: this.sessionId,
-        query: { r: codeFromRole(this.role), k: this.token },
-      });
-      this.partySocket = socket;
-      socket.addEventListener("open", () => {
-        socket.send(
-          JSON.stringify({
-            t: "hello",
-            role: this.role,
-            token: this.token,
-            clientId: this.clientId,
-            ua: navigator.userAgent,
-            sessionMeta: this.role === "interviewer" ? this.meta : undefined,
-          }),
-        );
-      });
-      socket.addEventListener("message", (event) => this.handlePartyMessage(String(event.data)));
-      socket.addEventListener("close", () => {
-        if (!this.closed) this.setStatus({ connected: false, mode: "partykit", error: "Соединение с PartyKit закрыто" });
-      });
-      this.pushLocalAwareness();
-      window.addEventListener("beforeunload", this.beforeUnload);
-    } catch (error) {
-      this.setStatus({ connected: false, mode: "partykit", error: error instanceof Error ? error.message : "PartyKit unavailable" });
-      throw new CollabError("transport", "Не удалось подключиться к PartyKit");
-    }
   }
 
   // ── Server-режим: свой WebSocket-сервер (y-protocols + JSON телеметрия) ─────
@@ -541,40 +480,6 @@ export class CollabSession {
     }
     if (message.kind === "meta" && message.meta) {
       this.emitMeta(message.meta);
-    }
-  }
-
-  private handlePartyMessage(raw: string): void {
-    let message: { t?: string; [key: string]: unknown };
-    try {
-      message = JSON.parse(raw) as { t?: string; [key: string]: unknown };
-    } catch {
-      return;
-    }
-    if (message.t === "welcome") {
-      const serverTime = typeof message.serverTime === "number" ? message.serverTime : Date.now();
-      this.clockOffset = serverTime - Date.now();
-      if (message.sessionMeta && typeof message.sessionMeta === "object") {
-        this.emitMeta(message.sessionMeta as SessionMeta);
-      }
-      this.setStatus({ connected: true, mode: "partykit", error: null });
-      this.sendTelemetry(this.presenceEvent("session_join"));
-      return;
-    }
-    if (message.t === "reject") {
-      this.setStatus({ connected: false, mode: "partykit", error: String(message.reason ?? "reject") });
-      return;
-    }
-    if (message.t === "tel_feed" && message.event) {
-      this.emitTelemetry(message.event as TelemetryEvent);
-      return;
-    }
-    if (message.t === "tel_history" && Array.isArray(message.events)) {
-      (message.events as TelemetryEvent[]).forEach((event) => this.emitTelemetry(event));
-      return;
-    }
-    if (message.t === "ping" && this.partySocket?.readyState === WebSocket.OPEN) {
-      this.partySocket.send(JSON.stringify({ t: "pong", ts: Date.now() }));
     }
   }
 

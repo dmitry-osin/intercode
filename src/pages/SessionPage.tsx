@@ -3,6 +3,8 @@ import { Copy, DoorOpen, Download, Loader2, Lock, Radio, Users } from "lucide-re
 import { useLocation, useSearchParams } from "wouter";
 import { toast } from "sonner";
 import type { EditorView } from "@codemirror/view";
+import { useI18n } from "@/app/i18n";
+import { LocaleToggle } from "@/app/LocaleToggle";
 import { ThemeToggle, useAppTheme } from "@/app/theme";
 import { CollabError, CollabSession, type CollabStatus } from "@/collab/provider";
 import { updateServerSession } from "@/collab/api";
@@ -11,13 +13,14 @@ import { CodeEditor, type IndentSetting } from "@/editor/CodeEditor";
 import { languageIds, languageLabels, type LanguageId } from "@/editor/languages";
 import { copyText } from "@/lib/download";
 import {
-  loadDisplayName,
   loadEditCount,
   loadFinalCode,
+  loadRoleName,
   loadTelemetryHistory,
   saveDisplayName,
   saveEditCount,
   saveFinalCode,
+  saveRoleName,
   saveSessionMeta,
 } from "@/session/store";
 import { attachTelemetryCollector } from "@/telemetry/collector";
@@ -31,7 +34,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Participant, Role, SessionMeta } from "@/types";
-import { roleLabels } from "@/types";
+import { roleLabelKeys } from "@/types";
 
 function participantsFromAwareness(collab: CollabSession): Participant[] {
   const participants = new Map<string, Participant>();
@@ -52,16 +55,16 @@ function participantsFromAwareness(collab: CollabSession): Participant[] {
   return Array.from(participants.values()).sort((a, b) => a.joinedAt - b.joinedAt);
 }
 
-function errorMessage(error: unknown): { title: string; message: string } {
+function errorMessage(error: unknown, t: (key: string) => string): { title: string; message: string } {
   if (error instanceof CollabError && error.code === "bad_token") {
-    return { title: "Неверная ссылка", message: error.message };
+    return { title: t("room.error.badLink.title"), message: error.message };
   }
   if (error instanceof CollabError && error.code === "not_found") {
-    return { title: "Комната недоступна локально", message: error.message };
+    return { title: t("room.error.notFound.title"), message: error.message };
   }
   return {
-    title: "Не удалось подключиться",
-    message: error instanceof Error ? error.message : "Проверьте ссылку и доступность PartyKit.",
+    title: t("room.error.connect.title"),
+    message: error instanceof Error ? error.message : t("room.error.connect.fallback"),
   };
 }
 
@@ -69,9 +72,13 @@ export default function SessionPage({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const [searchParams] = useSearchParams();
   const { theme } = useAppTheme();
+  const { t } = useI18n();
   const role = roleFromCode(searchParams.get("r"));
   const token = searchParams.get("k") ?? "";
-  const [displayName, setDisplayName] = useState(() => loadDisplayName());
+  // Имя роли из хранилища браузера; при отсутствии — значение по умолчанию текущей локали.
+  const [displayName, setDisplayName] = useState(() =>
+    role ? loadRoleName(role, t(`defaultName.${role}`)) : "",
+  );
   const [collab, setCollab] = useState<CollabSession | null>(null);
   const [status, setStatus] = useState<CollabStatus>({ connected: false, mode: "local", error: null });
   const [meta, setMeta] = useState<SessionMeta | null>(null);
@@ -86,7 +93,7 @@ export default function SessionPage({ id }: { id: string }) {
   const interviewer = role === "interviewer";
   const invalidRoleError = role
     ? null
-    : { title: "Роль не указана", message: "Откройте одну из трёх ссылок из лобби: interviewer, interviewee или viewer." };
+    : { title: t("room.error.noRole.title"), message: t("room.error.noRole.message") };
 
   useEffect(() => {
     if (!role) return;
@@ -101,7 +108,7 @@ export default function SessionPage({ id }: { id: string }) {
           feed.clear();
           feed.addEvents(loadTelemetryHistory(id));
         }
-        session = await CollabSession.create({ sessionId: id, role, token, displayName: loadDisplayName() });
+        session = await CollabSession.create({ sessionId: id, role, token, displayName });
         if (disposed) {
           session.close();
           return;
@@ -125,7 +132,7 @@ export default function SessionPage({ id }: { id: string }) {
         detach.push(() => session?.awareness.off("change", updateParticipants));
         updateParticipants();
       } catch (connectError) {
-        if (!disposed) setError(errorMessage(connectError));
+        if (!disposed) setError(errorMessage(connectError, t));
       }
     };
 
@@ -137,6 +144,7 @@ export default function SessionPage({ id }: { id: string }) {
       session?.close();
       setCollab(null);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- переподключаемся только по id/роли/токену
   }, [id, role, token]);
 
   useEffect(() => {
@@ -167,6 +175,7 @@ export default function SessionPage({ id }: { id: string }) {
   const changeName = (name: string) => {
     setDisplayName(name);
     saveDisplayName(name);
+    if (role) saveRoleName(role, name);
     collab?.setDisplayName(name);
   };
 
@@ -174,12 +183,12 @@ export default function SessionPage({ id }: { id: string }) {
 
   const copyFinalCode = async () => {
     await copyText(finalCode());
-    toast.success("Финальный код скопирован");
+    toast.success(t("room.codeCopied"));
   };
 
   const closeSession = () => {
     if (!collab || !meta || !canControlRoom(collab.role)) return;
-    if (!window.confirm("Завершить сессию и открыть страницу экспорта?")) return;
+    if (!window.confirm(t("room.closeConfirm"))) return;
     const closedMeta = { ...meta, closedAt: Date.now(), status: "ended" as const };
     saveFinalCode(id, finalCode());
     saveSessionMeta(closedMeta);
@@ -200,7 +209,7 @@ export default function SessionPage({ id }: { id: string }) {
       <main className="flex min-h-screen items-center justify-center">
         <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
           <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          <span>Подключаемся к комнате…</span>
+          <span>{t("room.connecting")}</span>
         </div>
       </main>
     );
@@ -213,47 +222,48 @@ export default function SessionPage({ id }: { id: string }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-bold">{meta.title}</h1>
-              <Badge variant="secondary">{roleLabels[role]}</Badge>
+              <Badge variant="secondary">{t(roleLabelKeys[role])}</Badge>
               <Badge variant={status.connected ? "default" : "destructive"} className="gap-1">
                 <Radio className="h-3 w-3" />
                 {status.connected
                   ? status.mode === "local"
-                    ? "local demo"
-                    : status.mode === "server"
-                      ? "server"
-                      : "PartyKit"
-                  : "offline"}
+                    ? t("room.status.local")
+                    : t("room.status.server")
+                  : t("room.status.offline")}
               </Badge>
               {readOnly && (
                 <Badge variant="outline" className="gap-1">
                   <Lock className="h-3 w-3" />
-                  read-only
+                  {t("room.readOnly")}
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">Сессия {id} · {status.error ?? "синхронизация активна"}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("common.session")} {id} · {status.error ?? t("room.syncActive")}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={displayName}
               onChange={(event) => changeName(event.target.value)}
-              placeholder="Ваше имя"
+              placeholder={t("room.namePlaceholder")}
               className="w-40"
             />
+            <LocaleToggle />
             <ThemeToggle compact />
             {interviewer && (
               <>
                 <Button variant="outline" onClick={() => void copyFinalCode()}>
                   <Copy className="h-4 w-4" />
-                  Код
+                  {t("common.code")}
                 </Button>
                 <Button variant="outline" onClick={() => navigate(`/export/${id}`)}>
                   <Download className="h-4 w-4" />
-                  Экспорт
+                  {t("common.export")}
                 </Button>
                 <Button variant="destructive" onClick={closeSession}>
                   <DoorOpen className="h-4 w-4" />
-                  Завершить
+                  {t("common.close")}
                 </Button>
               </>
             )}
@@ -264,8 +274,8 @@ export default function SessionPage({ id }: { id: string }) {
           <Card className="overflow-hidden">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b py-3">
               <div>
-                <CardTitle className="text-base">Совместный редактор</CardTitle>
-                <CardDescription>Код и курсоры синхронизируются через Yjs.</CardDescription>
+                <CardTitle className="text-base">{t("room.editor.title")}</CardTitle>
+                <CardDescription>{t("room.editor.subtitle")}</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={language} onValueChange={changeLanguage} disabled={!interviewer}>
@@ -314,12 +324,10 @@ export default function SessionPage({ id }: { id: string }) {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Users className="h-4 w-4" />
-                    Режим участника
+                    {t("room.participantMode")}
                   </CardTitle>
                   <CardDescription>
-                    {role === "interviewee"
-                      ? "Вы можете редактировать код и видеть курсоры других участников."
-                      : "Вы наблюдаете за кодом и курсорами в режиме read-only."}
+                    {role === "interviewee" ? t("room.participant.interviewee") : t("room.participant.viewer")}
                   </CardDescription>
                 </CardHeader>
               </Card>

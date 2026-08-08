@@ -2,7 +2,7 @@ import { defaultRoomConfig, type Role, type SessionMeta } from "@/types";
 import { codeFromRole } from "./roles";
 
 /**
- * HTTP API собственного сервера InterCode (режим self-hosted VPS).
+ * HTTP API собственного сервера IntQst (режим self-hosted VPS).
  * Базовый URL — тот же origin (nginx проксирует /api и /ws), либо VITE_API_BASE для dev.
  */
 
@@ -31,7 +31,7 @@ export function resetServerProbe(): void {
 function normalizeServerMeta(raw: Partial<SessionMeta> & { id: string }): SessionMeta {
   return {
     id: raw.id,
-    title: raw.title ?? "InterCode session",
+    title: raw.title ?? "IntQst session",
     createdAt: raw.createdAt ?? Date.now(),
     closedAt: raw.closedAt ?? null,
     language: raw.language ?? "typescript",

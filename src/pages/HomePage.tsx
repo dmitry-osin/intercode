@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ArrowRight, Code2, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { useI18n } from "@/app/i18n";
+import { LocaleToggle } from "@/app/LocaleToggle";
 import { ThemeToggle } from "@/app/theme";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,13 +15,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { languageIds, languageLabels, starterCode, type LanguageId } from "@/editor/languages";
 import { randomId } from "@/lib/id";
 import { createServerSession, probeServerApi } from "@/collab/api";
-import { saveDisplayName, saveSessionMeta } from "@/session/store";
+import { loadRoleName, saveDisplayName, saveRoleName, saveSessionMeta } from "@/session/store";
 import { defaultAiPromptText, type RoomConfig, type SessionMeta } from "@/types";
+
+/** Название сессии по умолчанию: дата и время создания (формат текущей локали). */
+function generatedSessionTitle(locale: string): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return locale === "ru" ? `Сессия ${stamp}` : `Session ${stamp}`;
+}
 
 export default function HomePage() {
   const [, navigate] = useLocation();
-  const [title, setTitle] = useState("Junior FE — debounce task");
-  const [hostName, setHostName] = useState("Интервьюер");
+  const { t, locale } = useI18n();
+  const [title, setTitle] = useState(() => generatedSessionTitle(locale));
+  const [hostName, setHostName] = useState(() => loadRoleName("interviewer", t("defaultName.interviewer")));
   const [language, setLanguage] = useState<LanguageId>("typescript");
   const [initialCode, setInitialCode] = useState(starterCode.typescript);
   const [copyBlocked, setCopyBlocked] = useState(true);
@@ -40,8 +51,10 @@ export default function HomePage() {
       devtoolsHeuristics,
     };
     const code = initialCode.trim() ? initialCode : starterCode[language];
-    const name = hostName.trim() || "Интервьюер";
-    const sessionTitle = title.trim() || "InterCode session";
+    const name = hostName.trim() || t("defaultName.interviewer");
+    const sessionTitle = title.trim() || generatedSessionTitle(locale);
+    saveDisplayName(name);
+    saveRoleName("interviewer", name);
 
     // Если рядом поднят наш сервер (VPS/self-hosted) — сессию и токены создаёт он.
     if (await probeServerApi()) {
@@ -49,14 +62,11 @@ export default function HomePage() {
         const remote = await createServerSession({ language, initialCode: code, config });
         const meta: SessionMeta = { ...remote, title: sessionTitle, hostName: name };
         saveSessionMeta(meta);
-        saveDisplayName(name);
-        toast.success("Сессия создана на сервере", {
-          description: "Ссылки работают с любых устройств — отправьте кандидату его ссылку.",
-        });
+        toast.success(t("home.toast.server.title"), { description: t("home.toast.server.desc") });
         navigate(`/lobby/${meta.id}`);
         return;
       } catch {
-        toast.error("Сервер не ответил", { description: "Создаю локальную демо-сессию в этом браузере." });
+        toast.error(t("home.toast.serverFail.title"), { description: t("home.toast.serverFail.desc") });
       }
     }
 
@@ -77,8 +87,7 @@ export default function HomePage() {
       },
     };
     saveSessionMeta(meta);
-    saveDisplayName(meta.hostName);
-    toast.success("Сессия создана", { description: "Откройте лобби и скопируйте ссылку кандидата." });
+    toast.success(t("home.toast.local.title"), { description: t("home.toast.local.desc") });
     navigate(`/lobby/${id}`);
   };
 
@@ -91,54 +100,56 @@ export default function HomePage() {
               <Code2 className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-lg font-bold">InterCode</p>
-              <p className="text-sm text-muted-foreground">live-собеседования по коду</p>
+              <p className="text-lg font-bold">{t("app.brand")}</p>
+              <p className="text-sm text-muted-foreground">{t("app.tagline")}</p>
             </div>
           </div>
-          <ThemeToggle compact />
+          <div className="flex items-center gap-2">
+            <LocaleToggle />
+            <ThemeToggle compact />
+          </div>
         </header>
 
         <section className="grid flex-1 items-center gap-6 py-10 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground">
               <ShieldCheck className="h-4 w-4 text-primary" />
-              Yjs + PartyKit · статический фронтенд
+              {t("home.badge")}
             </div>
             <div className="space-y-4">
               <h1 className="max-w-xl text-4xl font-bold tracking-tight sm:text-5xl">
-                Комната собеседования с совместным редактором и анти-чит телеметрией
+                {t("home.hero.title")}
               </h1>
               <p className="max-w-2xl text-lg text-muted-foreground">
-                Создайте сессию, отправьте кандидату ссылку и наблюдайте код, курсоры и сигналы:
-                копирование, вставку, переключение вкладок и подозрительные комбинации.
+                {t("home.hero.subtitle")}
               </p>
             </div>
             <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-3">
-              <div className="rounded-xl border bg-card p-3">3 роли и ссылки с токенами</div>
-              <div className="rounded-xl border bg-card p-3">CodeMirror 6 + lazy языки</div>
-              <div className="rounded-xl border bg-card p-3">Экспорт .codesession.json</div>
+              <div className="rounded-xl border bg-card p-3">{t("home.feature.roles")}</div>
+              <div className="rounded-xl border bg-card p-3">{t("home.feature.editor")}</div>
+              <div className="rounded-xl border bg-card p-3">{t("home.feature.export")}</div>
             </div>
           </div>
 
           <Card className="shadow-xl">
             <CardHeader>
-              <CardTitle>Новая сессия</CardTitle>
-              <CardDescription>Стартовый код попадёт в комнату, когда интервьюер откроет её первым.</CardDescription>
+              <CardTitle>{t("home.form.title")}</CardTitle>
+              <CardDescription>{t("home.form.description")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="title">Название</Label>
+                  <Label htmlFor="title">{t("home.form.name")}</Label>
                   <Input id="title" value={title} onChange={(event) => setTitle(event.target.value)} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="hostName">Ваше имя</Label>
+                  <Label htmlFor="hostName">{t("home.form.yourName")}</Label>
                   <Input id="hostName" value={hostName} onChange={(event) => setHostName(event.target.value)} />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Язык подсветки</Label>
+                <Label>{t("home.form.language")}</Label>
                 <Select
                   value={language}
                   onValueChange={(value) => {
@@ -148,7 +159,7 @@ export default function HomePage() {
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Выберите язык" />
+                    <SelectValue placeholder={t("home.form.languagePlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {languageIds.map((id) => (
@@ -161,7 +172,7 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="initialCode">Стартовый фрагмент кода</Label>
+                <Label htmlFor="initialCode">{t("home.form.initialCode")}</Label>
                 <Textarea
                   id="initialCode"
                   value={initialCode}
@@ -172,30 +183,30 @@ export default function HomePage() {
 
               <div className="grid gap-3 rounded-xl border p-3">
                 <div>
-                  <p className="text-sm font-medium">Защита буфера собеседуемого</p>
+                  <p className="text-sm font-medium">{t("home.defense.title")}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Обфускация, порча и AI-инструкция меняют только скопированный текст, не код в комнате.
+                    {t("home.defense.subtitle")}
                   </p>
                 </div>
                 <label className="flex items-center justify-between gap-3 text-sm">
-                  <span>Блокировать копирование у собеседуемого</span>
+                  <span>{t("home.defense.block")}</span>
                   <Switch checked={copyBlocked} onCheckedChange={setCopyBlocked} />
                 </label>
                 <label className="flex items-center justify-between gap-3 text-sm">
-                  <span>Обфусцировать скопированный код</span>
+                  <span>{t("home.defense.obfuscate")}</span>
                   <Switch checked={clipboardObfuscation} onCheckedChange={setClipboardObfuscation} />
                 </label>
                 <label className="flex items-center justify-between gap-3 text-sm">
-                  <span>Портить копию: UUID и дубли фрагментов строк</span>
+                  <span>{t("home.defense.corrupt")}</span>
                   <Switch checked={clipboardCorruption} onCheckedChange={setClipboardCorruption} />
                 </label>
                 <label className="flex items-center justify-between gap-3 text-sm">
-                  <span>Добавлять AI-инструкцию в конец буфера</span>
+                  <span>{t("home.defense.aiPrompt")}</span>
                   <Switch checked={aiPromptInjection} onCheckedChange={setAiPromptInjection} />
                 </label>
                 {aiPromptInjection && (
                   <div className="space-y-2 rounded-lg bg-muted p-3">
-                    <Label htmlFor="aiPromptText">Текст AI-инструкции</Label>
+                    <Label htmlFor="aiPromptText">{t("home.defense.aiPromptText")}</Label>
                     <Textarea
                       id="aiPromptText"
                       value={aiPromptText}
@@ -205,19 +216,15 @@ export default function HomePage() {
                   </div>
                 )}
                 <label className="flex items-center justify-between gap-3 border-t pt-3 text-sm">
-                  <span>Эвристика DevTools (опционально)</span>
+                  <span>{t("home.defense.devtools")}</span>
                   <Switch checked={devtoolsHeuristics} onCheckedChange={setDevtoolsHeuristics} />
                 </label>
               </div>
 
-              <Button className="w-full" size="lg" onClick={createSession}>
-                Создать сессию
+              <Button className="w-full" size="lg" onClick={() => void createSession()}>
+                {t("home.form.submit")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Local demo синхронизирует вкладки этого браузера. Для реального real-time задайте
-                VITE_PARTYKIT_HOST и задеплойте PartyKit-комнату.
-              </p>
             </CardContent>
           </Card>
         </section>

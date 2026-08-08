@@ -1,6 +1,6 @@
 import type { TelemetryEvent } from "@/types";
 
-const keyFor = (sessionId: string, clientId: string) => `intercode:telemetry-buffer:${sessionId}:${clientId}`;
+const keyFor = (sessionId: string, clientId: string) => `intqst:telemetry-buffer:${sessionId}:${clientId}`;
 const CAP = 500;
 
 export function loadBufferedEvents(sessionId: string, clientId: string): TelemetryEvent[] {

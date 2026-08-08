@@ -3,6 +3,8 @@ import { Check, Copy, ExternalLink, QrCode } from "lucide-react";
 import { Link } from "wouter";
 import { toDataURL } from "qrcode";
 import { toast } from "sonner";
+import { useI18n } from "@/app/i18n";
+import { LocaleToggle } from "@/app/LocaleToggle";
 import { ThemeToggle } from "@/app/theme";
 import { RoleGuard } from "@/ui/RoleGuard";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +16,7 @@ import { formatTime } from "@/lib/format";
 import { loadSessionMeta } from "@/session/store";
 import type { Role, SessionMeta } from "@/types";
 import { codeFromRole } from "@/collab/roles";
-import { roleLabels } from "@/types";
+import { roleLabelKeys } from "@/types";
 
 const roleOrder: Role[] = ["interviewer", "interviewee", "viewer"];
 
@@ -26,6 +28,7 @@ function sessionLink(meta: SessionMeta, role: Role): string {
 }
 
 export default function LobbyPage({ id }: { id: string }) {
+  const { t } = useI18n();
   const [meta] = useState<SessionMeta | null>(() => loadSessionMeta(id));
   const [copiedRole, setCopiedRole] = useState<Role | null>(null);
   const [qr, setQr] = useState("");
@@ -45,13 +48,13 @@ export default function LobbyPage({ id }: { id: string }) {
   }, [links]);
 
   if (!meta || !links) {
-    return <RoleGuard title="Лобби не найдено" message="Метаданные сессии есть только в браузере, где её создали, пока не подключён PartyKit." />;
+    return <RoleGuard title={t("lobby.notFound.title")} message={t("lobby.notFound.message")} />;
   }
 
   const copyRole = async (role: Role) => {
     await copyText(links[role]);
     setCopiedRole(role);
-    toast.success(`Ссылка ${roleLabels[role].toLowerCase()} скопирована`);
+    toast.success(t("lobby.linkCopied", { role: t(`role.${role}.short`) }));
     window.setTimeout(() => setCopiedRole(null), 1200);
   };
 
@@ -64,13 +67,16 @@ export default function LobbyPage({ id }: { id: string }) {
               <h1 className="text-2xl font-bold">{meta.title}</h1>
               <Badge variant="secondary">{languageLabels[meta.language as LanguageId] ?? meta.language}</Badge>
             </div>
-            <p className="text-sm text-muted-foreground">Сессия {meta.id} · создана в {formatTime(meta.createdAt)}</p>
+            <p className="text-sm text-muted-foreground">
+              {t("common.session")} {meta.id} · {t("lobby.createdAt", { time: formatTime(meta.createdAt) })}
+            </p>
           </div>
           <div className="flex items-center gap-2">
+            <LocaleToggle />
             <ThemeToggle compact />
             <Button asChild>
               <Link href={`/s/${meta.id}?r=i&k=${meta.tokens.interviewer}`}>
-                Открыть комнату интервьюера
+                {t("lobby.openRoom")}
                 <ExternalLink className="h-4 w-4" />
               </Link>
             </Button>
@@ -82,11 +88,11 @@ export default function LobbyPage({ id }: { id: string }) {
             {roleOrder.map((role) => (
               <Card key={role}>
                 <CardHeader>
-                  <CardTitle className="text-base">{roleLabels[role]}</CardTitle>
+                  <CardTitle className="text-base">{t(roleLabelKeys[role])}</CardTitle>
                   <CardDescription>
-                    {role === "interviewer" && "Редактирует, видит телеметрию, завершает сессию."}
-                    {role === "interviewee" && "Редактирует код; копирование блокируется и логируется."}
-                    {role === "viewer" && "Только наблюдает за кодом и курсорами."}
+                    {role === "interviewer" && t("lobby.role.interviewer.desc")}
+                    {role === "interviewee" && t("lobby.role.interviewee.desc")}
+                    {role === "viewer" && t("lobby.role.viewer.desc")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -95,7 +101,7 @@ export default function LobbyPage({ id }: { id: string }) {
                   </div>
                   <Button className="w-full" variant="outline" onClick={() => void copyRole(role)}>
                     {copiedRole === role ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    Копировать ссылку
+                    {t("lobby.copyLink")}
                   </Button>
                 </CardContent>
               </Card>
@@ -106,14 +112,14 @@ export default function LobbyPage({ id }: { id: string }) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <QrCode className="h-4 w-4" />
-                QR для кандидата
+                {t("lobby.qr.title")}
               </CardTitle>
-              <CardDescription>Быстрый вход с телефона или второго устройства в одном браузерном контуре.</CardDescription>
+              <CardDescription>{t("lobby.qr.desc")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center gap-3">
-              {qr ? <img src={qr} alt="QR-код ссылки кандидата" className="rounded-xl border bg-white p-2" /> : <div className="h-[220px] w-[220px] animate-pulse rounded-xl bg-muted" />}
+              {qr ? <img src={qr} alt={t("lobby.qr.alt")} className="rounded-xl border bg-white p-2" /> : <div className="h-[220px] w-[220px] animate-pulse rounded-xl bg-muted" />}
               <p className="text-center text-xs text-muted-foreground">
-                Для local demo ссылка должна быть открыта там же, где доступен localStorage этой сессии.
+                {t("lobby.qr.hint")}
               </p>
             </CardContent>
           </Card>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Bell, ChevronDown, ShieldAlert } from "lucide-react";
+import { useI18n } from "@/app/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,15 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatTime } from "@/lib/format";
 import { saveTelemetryHistory } from "@/session/store";
 import { useTelemetryFeed } from "@/telemetry/feed";
-import type { TelemetrySeverity } from "@/types";
+import type { TelemetrySeverity, TelemetryType } from "@/types";
 import { playAlertTone } from "./sound";
-import { describeTelemetryEvent, telemetryTypeLabels } from "./telemetryDescriptions";
-
-const severityLabels: Record<TelemetrySeverity, string> = {
-  info: "инфо",
-  warn: "внимание",
-  alert: "критично",
-};
+import { describeTelemetryEvent, telemetryTypeLabel } from "./telemetryDescriptions";
 
 function severityClass(severity: TelemetrySeverity): string {
   if (severity === "alert") return "bg-destructive text-white";
@@ -25,6 +20,7 @@ function severityClass(severity: TelemetrySeverity): string {
 }
 
 export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; clockOffset: number }) {
+  const { t } = useI18n();
   const { events, counts, alertCount } = useTelemetryFeed();
   const lastAlertId = useRef<string | null>(null);
 
@@ -47,19 +43,19 @@ export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; 
           <div>
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldAlert className="h-4 w-4 text-destructive" />
-              Телеметрия кандидата
+              {t("telemetry.title")}
             </CardTitle>
-            <CardDescription>Сигналы для интервьюера, а не гарантия честности.</CardDescription>
+            <CardDescription>{t("telemetry.subtitle")}</CardDescription>
           </div>
           <Badge variant={alertCount > 0 ? "destructive" : "secondary"} className="gap-1">
             <Bell className="h-3 w-3" />
-            {alertCount} alert
+            {t("telemetry.alerts", { count: alertCount })}
           </Badge>
         </div>
         <div className="flex flex-wrap gap-1 pt-2">
           {Object.entries(counts).slice(0, 8).map(([type, count]) => (
             <Badge key={type} variant="outline">
-              {telemetryTypeLabels[type as keyof typeof telemetryTypeLabels] ?? type}: {count}
+              {telemetryTypeLabel(t, type as TelemetryType)}: {count}
             </Badge>
           ))}
         </div>
@@ -67,7 +63,7 @@ export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; 
       <CardContent>
         {events.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Подозрительных событий пока нет.
+            {t("telemetry.empty")}
           </div>
         ) : (
           <ScrollArea className="h-[360px] pr-3">
@@ -78,15 +74,15 @@ export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; 
                     <div className="flex items-start gap-2">
                       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full severity-dot-${event.sev}`} />
                       <div>
-                        <strong className="text-sm">{telemetryTypeLabels[event.type]}</strong>
-                        <p className="mt-1 text-sm text-muted-foreground">{describeTelemetryEvent(event)}</p>
+                        <strong className="text-sm">{telemetryTypeLabel(t, event.type)}</strong>
+                        <p className="mt-1 text-sm text-muted-foreground">{describeTelemetryEvent(t, event)}</p>
                       </div>
                     </div>
                     <time className="shrink-0 text-xs text-muted-foreground">{formatTime(event.ts + clockOffset)}</time>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-2">
-                    <Badge className={severityClass(event.sev)}>{severityLabels[event.sev]}</Badge>
-                    <span className="text-xs text-muted-foreground">тип: {event.type}</span>
+                    <Badge className={severityClass(event.sev)}>{t(`severity.${event.sev}`)}</Badge>
+                    <span className="text-xs text-muted-foreground">{t("telemetry.typeLabel", { type: event.type })}</span>
                   </div>
                   <Collapsible className="mt-3 rounded-lg border bg-muted/40">
                     <CollapsibleTrigger asChild>
@@ -96,23 +92,23 @@ export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; 
                         size="sm"
                         className="group h-8 w-full justify-between px-3 text-xs"
                       >
-                        Технические детали
+                        {t("telemetry.details")}
                         <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="border-t px-3 py-2">
                       <dl className="grid gap-1.5 text-xs text-muted-foreground">
                         <div className="flex items-center justify-between gap-3">
-                          <dt>Участник</dt>
+                          <dt>{t("telemetry.actor")}</dt>
                           <dd className="font-mono">{event.actor}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <dt>ID события</dt>
+                          <dt>{t("telemetry.eventId")}</dt>
                           <dd className="max-w-[210px] truncate font-mono" title={event.id}>{event.id}</dd>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <dt>Серверное время</dt>
-                          <dd className="font-mono">{event.srvTs ? formatTime(event.srvTs) : "нет"}</dd>
+                          <dt>{t("telemetry.serverTime")}</dt>
+                          <dd className="font-mono">{event.srvTs ? formatTime(event.srvTs) : t("telemetry.noServerTime")}</dd>
                         </div>
                       </dl>
                       <pre className="mt-2 overflow-x-auto rounded-lg bg-background p-2 text-xs text-muted-foreground">

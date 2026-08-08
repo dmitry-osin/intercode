@@ -1,11 +1,12 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useI18n } from "@/app/i18n";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type AppTheme = "light" | "dark" | "hc";
 
-const themeKey = "intercode:theme";
+const themeKey = "intqst:theme";
 
 interface ThemeContextValue {
   theme: AppTheme;
@@ -51,8 +52,9 @@ const options: Array<{ value: AppTheme; label: string }> = [
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const { theme, setTheme } = useAppTheme();
+  const { t } = useI18n();
   return (
-    <div className="flex items-center gap-1 rounded-lg border bg-card p-1" aria-label="Тема оформления">
+    <div className="flex items-center gap-1 rounded-lg border bg-card p-1" aria-label={t("theme.label")}>
       {options.map((option) => (
         <Button
           key={option.value}
