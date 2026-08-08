@@ -10,6 +10,8 @@ import { attachVisibilityDetector } from "./detectors/visibility";
 import { attachKeyCombosDetector } from "./detectors/keyCombos";
 import { attachTypingBurstDetector } from "./detectors/typingBurst";
 import { attachDevtoolsHeuristicDetector } from "./detectors/devtoolsHeuristic";
+import { attachFullscreenDetector } from "./detectors/fullscreen";
+import { attachSelectionDumpDetector } from "./detectors/selectionDump";
 
 export function attachTelemetryCollector(
   provider: CollabSession,
@@ -53,6 +55,8 @@ export function attachTelemetryCollector(
     attachKeyCombosDetector(context),
     attachTypingBurstDetector(context),
     attachDevtoolsHeuristicDetector(context),
+    attachFullscreenDetector(context),
+    attachSelectionDumpDetector(context),
   ];
 
   return () => {

@@ -25,22 +25,25 @@ export function maxSeverity(a, b) {
   return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a;
 }
 
-/** Реестр типов телеметрии и базовая критичность (зеркало клиентского реестра, §7 ТЗ). */
+/** Реестр типов телеметрии и базовая критичность (зеркало клиентского реестра, §7 ТЗ).
+ *  ВАЖНО: ключи должны совпадать с клиентским TelemetryType (src/types/index.ts) —
+ *  неизвестные типы отбрасываются в normalizeTelemetryEvent. */
 export const TELEMETRY_BASE_SEVERITY = {
-  copy_attempt: "warn",
-  cut_attempt: "warn",
+  copy_attempt: "alert",
+  cut_attempt: "alert",
   paste: "warn",
-  key_combo: "warn",
-  devtools_suspected: "alert",
-  visibility: "info",
-  blur: "info",
-  focus: "info",
-  fullscreen_exit: "warn",
-  context_menu: "info",
-  drop_attempt: "warn",
+  keystroke_combo: "warn",
+  visibility_hidden: "warn",
+  visibility_visible: "info",
+  window_blur: "warn",
+  window_focus: "info",
+  ctx_menu: "info",
   typing_burst: "warn",
+  devtools_suspect: "warn",
+  selection_dump: "info",
   session_join: "info",
   session_leave: "info",
+  fullscreen_exit: "warn",
 };
 
 const KNOWN_TYPES = new Set(Object.keys(TELEMETRY_BASE_SEVERITY));
@@ -74,7 +77,7 @@ export function normalizeTelemetryEvent(raw, fallbackActor, config) {
     const lines = Number(p.lines ?? 1);
     if (len > 50 || lines > 3) sev = "alert";
   }
-  if (type === "devtools_suspected") sev = "alert";
+  if (type === "devtools_suspect") sev = "alert";
   return {
     id: typeof raw.id === "string" && raw.id.length <= 64 ? raw.id : newEventId(),
     actor,
