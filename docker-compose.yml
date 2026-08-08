@@ -1,0 +1,37 @@
+# InterCode — self-hosted развёртывание на VPS (без Cloudflare / GitHub Pages).
+#
+#   docker compose up -d --build
+#
+# web    — nginx: статика фронтенда + прокси /api и /ws на server
+# server — Node.js: WebSocket (Yjs sync), телеметрия, HTTP API сессий
+#
+# Данные (сессии, документы, телеметрия) — в volume server-data.
+
+services:
+  server:
+    build: ./server
+    restart: unless-stopped
+    environment:
+      PORT: 8090
+      DATA_DIR: /app/data
+    volumes:
+      - server-data:/app/data
+    # Наружу не публикуется — доступ только через nginx (web).
+    expose:
+      - "8090"
+
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # Раскомментируйте после настройки TLS (см. deploy/README.md):
+      # - "443:443"
+    # volumes:
+      # Сертификаты certbot для HTTPS-блока в deploy/nginx.conf:
+      # - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - server
+
+volumes:
+  server-data:

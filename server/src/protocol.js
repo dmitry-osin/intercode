@@ -1,0 +1,95 @@
+import { randomBytes, randomUUID } from "node:crypto";
+
+/** Идентификатор сессии и токены генерируются ТОЛЬКО на сервере (§4 ТЗ). */
+export function newSessionId() {
+  return randomBytes(9).toString("base64url"); // 12 символов
+}
+
+export function newToken() {
+  return randomBytes(16).toString("base64url"); // 22 символа
+}
+
+export function newEventId() {
+  return randomUUID();
+}
+
+const ROLE_CODES = { i: "interviewer", e: "interviewee", v: "viewer" };
+
+export function roleFromCode(code) {
+  return ROLE_CODES[code] ?? null;
+}
+
+const SEVERITY = { info: 0, warn: 1, alert: 2 };
+
+export function maxSeverity(a, b) {
+  return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a;
+}
+
+/** Реестр типов телеметрии и базовая критичность (зеркало клиентского реестра, §7 ТЗ). */
+export const TELEMETRY_BASE_SEVERITY = {
+  copy_attempt: "warn",
+  cut_attempt: "warn",
+  paste: "warn",
+  key_combo: "warn",
+  devtools_suspected: "alert",
+  visibility: "info",
+  blur: "info",
+  focus: "info",
+  fullscreen_exit: "warn",
+  context_menu: "info",
+  drop_attempt: "warn",
+  typing_burst: "warn",
+  session_join: "info",
+  session_leave: "info",
+};
+
+const KNOWN_TYPES = new Set(Object.keys(TELEMETRY_BASE_SEVERITY));
+const MAX_PAYLOAD_BYTES = 4096;
+
+/**
+ * Валидация и нормализация события телеметрии от клиента.
+ * Сервер добавляет srvTs, пересчитывает sev, отсекает мусор.
+ * Возвращает null, если событие нужно отбросить.
+ */
+export function normalizeTelemetryEvent(raw, fallbackActor, config) {
+  if (!raw || typeof raw !== "object") return null;
+  const type = typeof raw.type === "string" ? raw.type : "";
+  if (!KNOWN_TYPES.has(type)) return null;
+  // Клиент присылает свой clientId как actor — сохраняем, иначе подставляем роль соединения.
+  const actor =
+    typeof raw.actor === "string" && raw.actor.length > 0 && raw.actor.length <= 64
+      ? raw.actor
+      : fallbackActor;
+  const ts = Number.isFinite(raw.ts) ? Number(raw.ts) : Date.now();
+  let p = raw.p && typeof raw.p === "object" && !Array.isArray(raw.p) ? raw.p : {};
+  try {
+    if (JSON.stringify(p).length > MAX_PAYLOAD_BYTES) p = { truncated: true };
+  } catch {
+    p = { truncated: true };
+  }
+  let sev = TELEMETRY_BASE_SEVERITY[type] ?? "info";
+  // Вставка >N символов или >M строк → alert (§6 ТЗ).
+  if (type === "paste" && config?.pasteThresholdAlert !== false) {
+    const len = Number(p.len ?? 0);
+    const lines = Number(p.lines ?? 1);
+    if (len > 50 || lines > 3) sev = "alert";
+  }
+  if (type === "devtools_suspected") sev = "alert";
+  return {
+    id: typeof raw.id === "string" && raw.id.length <= 64 ? raw.id : newEventId(),
+    actor,
+    ts,
+    srvTs: Date.now(),
+    type,
+    sev,
+    p,
+  };
+}
+
+const MAX_NAME_LEN = 40;
+
+export function sanitizeDisplayName(raw, fallback) {
+  if (typeof raw !== "string") return fallback;
+  const trimmed = raw.trim().slice(0, MAX_NAME_LEN);
+  return trimmed || fallback;
+}

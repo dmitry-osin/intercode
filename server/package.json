@@ -1,0 +1,19 @@
+{
+  "name": "intercode-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "InterCode realtime collaboration & telemetry server (Yjs + WebSocket)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "lib0": "^0.2.99",
+    "ws": "^8.18.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.21"
+  }
+}

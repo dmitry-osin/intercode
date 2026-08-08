@@ -1,0 +1,33 @@
+# InterCode — развёртывание из готовых образов GitHub Container Registry.
+# Сборка на VPS не нужна: образы собирает GitHub Actions (см. .github/workflows/docker.yml).
+#
+#   1. Замените OWNER/REPO на ваш репозиторий (в двух местах ниже)
+#      или задайте переменную:  export GHCR_PREFIX=ghcr.io/owner/repo
+#   2. docker compose -f docker-compose.ghcr.yml pull
+#   3. docker compose -f docker-compose.ghcr.yml up -d
+#
+# Для приватных пакетов GHCR сначала: docker login ghcr.io
+
+services:
+  server:
+    image: ${GHCR_PREFIX:-ghcr.io/OWNER/REPO}-server:latest
+    restart: unless-stopped
+    environment:
+      PORT: 8090
+      DATA_DIR: /app/data
+    volumes:
+      - server-data:/app/data
+    expose:
+      - "8090"
+
+  web:
+    image: ${GHCR_PREFIX:-ghcr.io/OWNER/REPO}-web:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # - "443:443"
+    depends_on:
+      - server
+
+volumes:
+  server-data:
