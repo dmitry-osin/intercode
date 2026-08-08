@@ -42,7 +42,7 @@ export function attachCopyCutDetector(context: DetectorContext): Detach {
 
   const onContextMenu = (event: MouseEvent) => {
     if (!insideEditor(context.editorEl, event.target)) return;
-    context.emit("ctx_menu", { pos: { x: event.clientX, y: event.clientY } }, "info");
+    context.emit("ctx_menu", { pos: { x: event.clientX, y: event.clientY } }, "warn");
   };
 
   document.addEventListener("copy", onCopy, true);

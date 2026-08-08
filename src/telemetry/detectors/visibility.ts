@@ -12,7 +12,7 @@ export function attachVisibilityDetector(context: DetectorContext): Detach {
     }
     const awayMs = hiddenAt ? Date.now() - hiddenAt : 0;
     hiddenAt = null;
-    context.emit("visibility_visible", { awayMs }, "info");
+    context.emit("visibility_visible", { awayMs }, "warn");
   };
 
   const onBlur = () => {
@@ -23,7 +23,7 @@ export function attachVisibilityDetector(context: DetectorContext): Detach {
   const onFocus = () => {
     const awayMs = blurredAt ? Date.now() - blurredAt : 0;
     blurredAt = null;
-    context.emit("window_focus", { awayMs }, "info");
+    context.emit("window_focus", { awayMs }, "warn");
   };
 
   document.addEventListener("visibilitychange", onVisibility);

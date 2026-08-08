@@ -8,6 +8,7 @@ function comboName(event: KeyboardEvent): string | null {
   if (event.metaKey && event.shiftKey && event.key === "4") return "Cmd+Shift+4";
   if ((event.metaKey || event.ctrlKey) && !event.shiftKey && key.toLowerCase() === "c") return `${mod}+C`;
   if ((event.metaKey || event.ctrlKey) && !event.shiftKey && key.toLowerCase() === "x") return `${mod}+X`;
+  if ((event.metaKey || event.ctrlKey) && !event.shiftKey && key.toLowerCase() === "a") return `${mod}+A`;
   return null;
 }
 
