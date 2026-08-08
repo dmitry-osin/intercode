@@ -10,7 +10,7 @@
 
 services:
   server:
-    image: ${GHCR_PREFIX:-ghcr.io/OWNER/REPO}-server:latest
+    image: ${GHCR_PREFIX:-ghcr.io/dmitry-osin/intercode}-server:latest
     restart: unless-stopped
     environment:
       PORT: 8090
@@ -21,7 +21,7 @@ services:
       - "8090"
 
   web:
-    image: ${GHCR_PREFIX:-ghcr.io/OWNER/REPO}-web:latest
+    image: ${GHCR_PREFIX:-ghcr.io/dmitry-osin/intercode}-web:latest
     restart: unless-stopped
     ports:
       - "80:80"

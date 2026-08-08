@@ -133,6 +133,19 @@ docker compose ps                 # состояние контейнеров
 docker compose restart server     # перезапуск без потери данных
 ```
 
+### Ошибка `EACCES: permission denied, mkdir '/app/data/sessions'`
+
+Контейнер сервера работает под пользователем `node`, а volume для данных,
+созданный старой версией образа, принадлежит root. После обновления образа
+(в Dockerfile каталог `/app/data` создаётся с владельцем `node`) почините
+права один раз:
+
+```bash
+docker compose up -d --build
+docker compose exec -u root server chown -R node:node /app/data
+docker compose restart server
+```
+
 ## Ограничения MVP (по ТЗ)
 
 - Нет аккаунтов: доступ только по ссылкам с токеном — храните их как пароли.

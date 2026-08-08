@@ -16,6 +16,11 @@ ENV NODE_ENV=production \
     PORT=8090 \
     DATA_DIR=/app/data
 
+# Каталог данных должен принадлежать пользователю node: при первом запуске
+# Docker копирует его права в свежий именованный volume, иначе процесс
+# (USER node) не сможет создать подкаталоги sessions/docs/telemetry.
+RUN mkdir -p /app/data && chown -R node:node /app/data
+
 # Сессии, Yjs-документы и журналы телеметрии — сюда монтируется volume.
 VOLUME /app/data
 
