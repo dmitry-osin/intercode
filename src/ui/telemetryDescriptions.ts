@@ -16,6 +16,7 @@ const TELEMETRY_TYPES: TelemetryType[] = [
   "typing_burst",
   "devtools_suspect",
   "selection_dump",
+  "screenshot_attempt",
   "session_join",
   "session_leave",
   "fullscreen_exit",
@@ -114,6 +115,10 @@ export function describeTelemetryEvent(t: TFunc, event: TelemetryEvent): string 
     case "selection_dump": {
       const len = asNumber(payload.len);
       return t("tel.desc.selection", { len: len ?? "?" });
+    }
+    case "screenshot_attempt": {
+      const combo = asString(payload.combo) ?? "PrintScreen";
+      return t("tel.desc.screenshot", { combo });
     }
     case "session_join": {
       const name = asString(payload.name) ?? event.actor;

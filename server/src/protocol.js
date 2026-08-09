@@ -41,6 +41,7 @@ export const TELEMETRY_BASE_SEVERITY = {
   typing_burst: "warn",
   devtools_suspect: "warn",
   selection_dump: "info",
+  screenshot_attempt: "warn",
   session_join: "info",
   session_leave: "info",
   fullscreen_exit: "warn",

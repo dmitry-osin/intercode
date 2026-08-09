@@ -288,8 +288,8 @@ export default function SessionPage({ id }: { id: string }) {
           </div>
         </header>
 
-        <section className="mt-4 grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_370px]">
-          <Card className="overflow-hidden">
+        <section className="mt-4 grid flex-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_370px]">
+          <Card className="flex flex-col overflow-hidden">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b py-3">
               <div>
                 <CardTitle className="text-base">{t("room.editor.title")}</CardTitle>
@@ -320,7 +320,7 @@ export default function SessionPage({ id }: { id: string }) {
                 </Select>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="flex min-h-0 flex-1 flex-col p-0">
               <CodeEditor
                 key={editorKeyRef.current}
                 collab={collab}
@@ -334,10 +334,10 @@ export default function SessionPage({ id }: { id: string }) {
             </CardContent>
           </Card>
 
-          <aside className="space-y-4">
+          <aside className="flex flex-col gap-4">
             <ParticipantsBar participants={participants} />
             {canSeeTelemetry(role) ? (
-              <TelemetryPanel sessionId={id} clockOffset={collab.clockOffset} />
+              <TelemetryPanel sessionId={id} clockOffset={collab.clockOffset} className="min-h-0 flex-1" />
             ) : (
               <Card>
                 <CardHeader>

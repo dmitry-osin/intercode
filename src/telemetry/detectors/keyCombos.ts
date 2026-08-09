@@ -17,6 +17,12 @@ export function attachKeyCombosDetector(context: DetectorContext): Detach {
     const combo = comboName(event);
     if (!combo) return;
     const selectionLen = window.getSelection()?.toString().length ?? 0;
+    // PrintScreen/Win+Shift+S/macOS-шорткаты — вероятный снимок экрана.
+    // Срабатывает только пока окно в фокусе: ОС не сообщает о скриншотах как таковых.
+    if (combo === "PrintScreen" || combo === "Cmd+Shift+4") {
+      context.emit("screenshot_attempt", { method: "hotkey", combo }, "warn");
+      return;
+    }
     if (combo.endsWith("+C")) {
       context.emit("copy_attempt", { method: "hotkey", selectionLen, combo }, "alert");
       return;

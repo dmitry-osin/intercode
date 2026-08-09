@@ -108,7 +108,7 @@ export const ru = {
 
   // Телеметрия
   "telemetry.title": "Телеметрия кандидата",
-  "telemetry.subtitle": "Сигналы для интервьюера, а не гарантия честности.",
+  "telemetry.subtitle": "Сигналы для интервьюера, а не гарантия честности. Скриншоты вне фокуса окна и фото экрана не отслеживаются.",
   "telemetry.alerts": "{count} alert",
   "telemetry.empty": "Подозрительных событий пока нет.",
   "telemetry.details": "Технические детали",
@@ -132,6 +132,7 @@ export const ru = {
   "tel.type.typing_burst": "Аномально быстрый ввод",
   "tel.type.devtools_suspect": "Подозрение на DevTools",
   "tel.type.selection_dump": "Размер выделения",
+  "tel.type.screenshot_attempt": "Возможный скриншот",
   "tel.type.session_join": "Участник подключился",
   "tel.type.session_leave": "Участник отключился",
   "tel.type.fullscreen_exit": "Выход из полноэкранного режима",
@@ -162,6 +163,7 @@ export const ru = {
   "tel.desc.devtools": "Сработала эвристика DevTools ({heuristic}).",
   "tel.desc.devtools.fallback": "эвристика",
   "tel.desc.selection": "Текущий размер выделения: {len} символов.",
+  "tel.desc.screenshot": "Нажата комбинация снимка экрана ({combo}). Скриншоты вне фокуса окна и с других устройств не отслеживаются.",
   "tel.desc.join": "{name} подключился как {role}.",
   "tel.desc.leave": "{name} ({role}) отключился.",
   "tel.desc.fullscreenExit": "Кандидат вышел из полноэкранного режима.",

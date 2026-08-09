@@ -19,7 +19,15 @@ function severityClass(severity: TelemetrySeverity): string {
   return "bg-secondary text-secondary-foreground";
 }
 
-export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; clockOffset: number }) {
+export function TelemetryPanel({
+  sessionId,
+  clockOffset,
+  className,
+}: {
+  sessionId: string;
+  clockOffset: number;
+  className?: string;
+}) {
   const { t } = useI18n();
   const { events, counts, alertCount } = useTelemetryFeed();
   const lastAlertId = useRef<string | null>(null);
@@ -37,7 +45,7 @@ export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; 
   }, [events]);
 
   return (
-    <Card className="min-h-[320px]">
+    <Card className={`flex min-h-[320px] flex-col ${className ?? ""}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -60,13 +68,13 @@ export function TelemetryPanel({ sessionId, clockOffset }: { sessionId: string; 
           ))}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex min-h-0 flex-1 flex-col">
         {events.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             {t("telemetry.empty")}
           </div>
         ) : (
-          <ScrollArea className="h-[360px] pr-3">
+          <ScrollArea className="h-[360px] min-h-0 flex-1 pr-3">
             <div className="space-y-2">
               {events.map((event) => (
                 <article key={event.id} className="rounded-xl border p-3">

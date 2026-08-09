@@ -108,7 +108,7 @@ export const en: Dictionary = {
 
   // Telemetry
   "telemetry.title": "Candidate telemetry",
-  "telemetry.subtitle": "Signals for the interviewer, not proof of dishonesty.",
+  "telemetry.subtitle": "Signals for the interviewer, not proof of dishonesty. Screenshots taken outside the focused window or with another device are not tracked.",
   "telemetry.alerts": "{count} alert",
   "telemetry.empty": "No suspicious events yet.",
   "telemetry.details": "Technical details",
@@ -132,6 +132,7 @@ export const en: Dictionary = {
   "tel.type.typing_burst": "Abnormally fast typing",
   "tel.type.devtools_suspect": "DevTools suspected",
   "tel.type.selection_dump": "Selection size",
+  "tel.type.screenshot_attempt": "Possible screenshot",
   "tel.type.session_join": "Participant joined",
   "tel.type.session_leave": "Participant left",
   "tel.type.fullscreen_exit": "Fullscreen exited",
@@ -162,6 +163,7 @@ export const en: Dictionary = {
   "tel.desc.devtools": "DevTools heuristic triggered ({heuristic}).",
   "tel.desc.devtools.fallback": "heuristic",
   "tel.desc.selection": "Current selection size: {len} characters.",
+  "tel.desc.screenshot": "A screenshot shortcut was pressed ({combo}). Screenshots taken while the window is unfocused or from another device are not tracked.",
   "tel.desc.join": "{name} joined as {role}.",
   "tel.desc.leave": "{name} ({role}) left.",
   "tel.desc.fullscreenExit": "Candidate exited fullscreen mode.",

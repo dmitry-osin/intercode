@@ -15,6 +15,7 @@ export type TelemetryType =
   | "typing_burst"
   | "devtools_suspect"
   | "selection_dump"
+  | "screenshot_attempt"
   | "session_join"
   | "session_leave"
   | "fullscreen_exit";
@@ -122,6 +123,7 @@ export const telemetryBaseSeverity: Record<TelemetryType, TelemetrySeverity> = {
   typing_burst: "warn",
   devtools_suspect: "warn",
   selection_dump: "info",
+  screenshot_attempt: "warn",
   session_join: "info",
   session_leave: "info",
   fullscreen_exit: "warn",
