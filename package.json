@@ -71,6 +71,7 @@
     "recharts": "^2.15.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
+    "unique-names-generator": "^4.7.1",
     "vaul": "^1.1.2",
     "wouter": "^3.10.0",
     "y-codemirror.next": "^0.3.5",

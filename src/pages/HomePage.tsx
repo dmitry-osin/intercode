@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowRight, Code2, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { uniqueNamesGenerator, adjectives, colors, animals } from "unique-names-generator";
 import { useI18n } from "@/app/i18n";
 import { LocaleToggle } from "@/app/LocaleToggle";
 import { ThemeToggle } from "@/app/theme";
@@ -18,18 +19,24 @@ import { createServerSession, probeServerApi } from "@/collab/api";
 import { loadRoleName, saveDisplayName, saveRoleName, saveSessionMeta } from "@/session/store";
 import { defaultAiPromptFor, type RoomConfig, type SessionMeta } from "@/types";
 
-/** Название сессии по умолчанию: дата и время создания (формат текущей локали). */
-function generatedSessionTitle(locale: string): string {
+/** Название сессии по умолчанию: случайная связка «прилагательное + цвет + животное»
+ *  в стиле Twitch-клипов (AzureSwiftFalcon), + дата/время для однозначности. */
+function generatedSessionTitle(): string {
+  const combo = uniqueNamesGenerator({
+    dictionaries: [adjectives, colors, animals],
+    separator: " ",
+    style: "capital",
+  });
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${pad(now.getDate())}.${pad(now.getMonth() + 1)}.${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  return locale === "ru" ? `Сессия ${stamp}` : `Session ${stamp}`;
+  const stamp = `${pad(now.getDate())}.${pad(now.getMonth() + 1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  return `${combo} · ${stamp}`;
 }
 
 export default function HomePage() {
   const [, navigate] = useLocation();
   const { t, locale } = useI18n();
-  const [title, setTitle] = useState(() => generatedSessionTitle(locale));
+  const [title, setTitle] = useState(() => generatedSessionTitle());
   const [hostName, setHostName] = useState(() => loadRoleName("interviewer", t("defaultName.interviewer")));
   const [language, setLanguage] = useState<LanguageId>("typescript");
   const [initialCode, setInitialCode] = useState(starterCode.typescript);
@@ -52,7 +59,7 @@ export default function HomePage() {
     };
     const code = initialCode.trim() ? initialCode : starterCode[language];
     const name = hostName.trim() || t("defaultName.interviewer");
-    const sessionTitle = title.trim() || generatedSessionTitle(locale);
+    const sessionTitle = title.trim() || generatedSessionTitle();
     saveDisplayName(name);
     saveRoleName("interviewer", name);
 
