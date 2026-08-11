@@ -29,6 +29,14 @@ export function validateToken(meta: SessionMeta, role: Role, token: string | nul
   return Boolean(token && meta.tokens[role] === token);
 }
 
+/** Ссылка на комнату для конкретной роли: .../#/s/{id}?r={i|e|v}&k={token}. */
+export function sessionLink(meta: SessionMeta, role: Role): string {
+  const url = new URL(window.location.href);
+  url.hash = `/s/${meta.id}?r=${codeFromRole(role)}&k=${meta.tokens[role]}`;
+  url.search = "";
+  return url.href;
+}
+
 const palette = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4f46e5"];
 
 export function colorForClient(clientId: string): string {

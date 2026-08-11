@@ -15,17 +15,10 @@ import { copyText } from "@/lib/download";
 import { formatTime } from "@/lib/format";
 import { loadSessionMeta } from "@/session/store";
 import type { Role, SessionMeta } from "@/types";
-import { codeFromRole } from "@/collab/roles";
+import { sessionLink } from "@/collab/roles";
 import { roleLabelKeys } from "@/types";
 
 const roleOrder: Role[] = ["interviewer", "interviewee", "viewer"];
-
-function sessionLink(meta: SessionMeta, role: Role): string {
-  const url = new URL(window.location.href);
-  url.hash = `/s/${meta.id}?r=${codeFromRole(role)}&k=${meta.tokens[role]}`;
-  url.search = "";
-  return url.href;
-}
 
 export default function LobbyPage({ id }: { id: string }) {
   const { t } = useI18n();

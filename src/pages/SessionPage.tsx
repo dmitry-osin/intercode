@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, DoorOpen, Download, Loader2, Lock, Radio, Users } from "lucide-react";
+import { Check, Copy, DoorOpen, Download, Loader2, Lock, Plus, Radio, Users } from "lucide-react";
 import { useLocation, useSearchParams } from "wouter";
 import { toast } from "sonner";
 import type { EditorView } from "@codemirror/view";
@@ -8,7 +8,7 @@ import { LocaleToggle } from "@/app/LocaleToggle";
 import { ThemeToggle, useAppTheme } from "@/app/theme";
 import { CollabError, CollabSession, type CollabStatus } from "@/collab/provider";
 import { updateServerSession } from "@/collab/api";
-import { canControlRoom, canEdit, canSeeTelemetry, roleFromCode } from "@/collab/roles";
+import { canControlRoom, canEdit, canSeeTelemetry, roleFromCode, sessionLink } from "@/collab/roles";
 import { CodeEditor, type IndentSetting } from "@/editor/CodeEditor";
 import { languageIds, languageLabels, type LanguageId } from "@/editor/languages";
 import { copyText } from "@/lib/download";
@@ -45,6 +45,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Participant, Role, SessionMeta } from "@/types";
 import { roleLabelKeys } from "@/types";
+
+const roleOrder: Role[] = ["interviewer", "interviewee", "viewer"];
 
 function participantsFromAwareness(collab: CollabSession): Participant[] {
   const participants = new Map<string, Participant>();
@@ -99,6 +101,7 @@ export default function SessionPage({ id }: { id: string }) {
   const [error, setError] = useState<{ title: string; message: string } | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [copiedRole, setCopiedRole] = useState<Role | null>(null);
   const editCountRef = useRef(loadEditCount(id));
   const editorKeyRef = useRef(0);
 
@@ -205,6 +208,18 @@ export default function SessionPage({ id }: { id: string }) {
     else toast.error(t("common.copyFailed"));
   };
 
+  const copyRoleLink = async (targetRole: Role) => {
+    if (!meta) return;
+    const ok = await copyText(sessionLink(meta, targetRole));
+    if (!ok) {
+      toast.error(t("common.copyFailed"));
+      return;
+    }
+    setCopiedRole(targetRole);
+    toast.success(t("lobby.linkCopied", { role: t(`role.${targetRole}.short`) }));
+    window.setTimeout(() => setCopiedRole(null), 1200);
+  };
+
   const closeSession = () => {
     if (!collab || !meta || !canControlRoom(collab.role)) return;
     const closedMeta = { ...meta, closedAt: Date.now(), status: "ended" as const };
@@ -271,6 +286,17 @@ export default function SessionPage({ id }: { id: string }) {
             <ThemeToggle compact />
             {interviewer && (
               <>
+                {roleOrder.map((linkRole) => (
+                  <Button
+                    key={linkRole}
+                    variant="outline"
+                    onClick={() => void copyRoleLink(linkRole)}
+                    title={t("room.copyLinkFor", { role: t(roleLabelKeys[linkRole]) })}
+                  >
+                    {copiedRole === linkRole ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {t(roleLabelKeys[linkRole])}
+                  </Button>
+                ))}
                 <Button variant="outline" onClick={() => void copyFinalCode()}>
                   <Copy className="h-4 w-4" />
                   {t("common.code")}
@@ -278,6 +304,10 @@ export default function SessionPage({ id }: { id: string }) {
                 <Button variant="outline" onClick={() => navigate(`/export/${id}`)}>
                   <Download className="h-4 w-4" />
                   {t("common.export")}
+                </Button>
+                <Button variant="outline" onClick={() => navigate("/")}>
+                  <Plus className="h-4 w-4" />
+                  {t("common.newSession")}
                 </Button>
                 <Button variant="destructive" onClick={() => setConfirmClose(true)}>
                   <DoorOpen className="h-4 w-4" />
