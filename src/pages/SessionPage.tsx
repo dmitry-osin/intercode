@@ -8,10 +8,11 @@ import { LocaleToggle } from "@/app/LocaleToggle";
 import { ThemeToggle, useAppTheme } from "@/app/theme";
 import { CollabError, CollabSession, type CollabStatus } from "@/collab/provider";
 import { updateServerSession } from "@/collab/api";
-import { canControlRoom, canEdit, canSeeTelemetry, roleFromCode, sessionLink } from "@/collab/roles";
+import { canControlRoom, canEdit, canSeeTelemetry, roleColor, roleFromCode, sessionLink } from "@/collab/roles";
 import { CodeEditor, type IndentSetting } from "@/editor/CodeEditor";
 import { languageIds, languageLabels, type LanguageId } from "@/editor/languages";
 import { copyText } from "@/lib/download";
+import { generateParticipantName } from "@/lib/names";
 import {
   loadEditCount,
   loadFinalCode,
@@ -87,9 +88,9 @@ export default function SessionPage({ id }: { id: string }) {
   const { t } = useI18n();
   const role = roleFromCode(searchParams.get("r"));
   const token = searchParams.get("k") ?? "";
-  // Имя роли из хранилища браузера; при отсутствии — значение по умолчанию текущей локали.
+  // Имя роли из хранилища браузера; при отсутствии — случайное сгенерированное имя.
   const [displayName, setDisplayName] = useState(() =>
-    role ? loadRoleName(role, t(`defaultName.${role}`)) : "",
+    role ? loadRoleName(role, generateParticipantName()) : "",
   );
   const [collab, setCollab] = useState<CollabSession | null>(null);
   const [status, setStatus] = useState<CollabStatus>({ connected: false, mode: "local", error: null });
@@ -249,13 +250,12 @@ export default function SessionPage({ id }: { id: string }) {
   }
 
   return (
-    <main className="min-h-screen">
-      <div className="mx-auto flex min-h-screen max-w-[1500px] flex-col px-4 py-4 sm:px-6">
+    <main className="h-screen overflow-hidden">
+      <div className="mx-auto flex h-full max-w-[1500px] flex-col px-4 py-4 sm:px-6">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-bold">{meta.title}</h1>
-              <Badge variant="secondary">{t(roleLabelKeys[role])}</Badge>
               <Badge variant={status.connected ? "default" : "destructive"} className="gap-1">
                 <Radio className="h-3 w-3" />
                 {status.connected
@@ -276,12 +276,22 @@ export default function SessionPage({ id }: { id: string }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={displayName}
-              onChange={(event) => changeName(event.target.value)}
-              placeholder={t("room.namePlaceholder")}
-              className="w-40"
-            />
+            <div className="flex items-center gap-1.5 rounded-md border bg-background pl-2.5">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: roleColor(role) }}
+                aria-hidden="true"
+              />
+              <Input
+                value={displayName}
+                onChange={(event) => changeName(event.target.value)}
+                placeholder={t("room.namePlaceholder")}
+                className="h-8 w-32 border-0 px-1.5 shadow-none focus-visible:ring-0"
+              />
+              <span className="shrink-0 pr-2.5 text-xs whitespace-nowrap text-muted-foreground">
+                ({t(roleLabelKeys[role])})
+              </span>
+            </div>
             <LocaleToggle />
             <ThemeToggle compact />
             {interviewer && (
@@ -318,8 +328,8 @@ export default function SessionPage({ id }: { id: string }) {
           </div>
         </header>
 
-        <section className="mt-4 grid flex-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_370px]">
-          <Card className="flex flex-col overflow-hidden">
+        <section className="mt-4 grid min-h-0 flex-1 items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_370px]">
+          <Card className="flex min-h-0 flex-col overflow-hidden">
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 border-b py-3">
               <div>
                 <CardTitle className="text-base">{t("room.editor.title")}</CardTitle>
@@ -364,7 +374,7 @@ export default function SessionPage({ id }: { id: string }) {
             </CardContent>
           </Card>
 
-          <aside className="flex flex-col gap-4">
+          <aside className="flex min-h-0 flex-col gap-4 overflow-hidden">
             <ParticipantsBar participants={participants} />
             {canSeeTelemetry(role) ? (
               <TelemetryPanel sessionId={id} clockOffset={collab.clockOffset} className="min-h-0 flex-1" />

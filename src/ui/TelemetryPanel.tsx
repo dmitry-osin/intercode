@@ -45,7 +45,7 @@ export function TelemetryPanel({
   }, [events]);
 
   return (
-    <Card className={`flex min-h-[320px] flex-col ${className ?? ""}`}>
+    <Card className={`flex min-h-0 flex-col overflow-hidden ${className ?? ""}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -68,13 +68,13 @@ export function TelemetryPanel({
           ))}
         </div>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col">
+      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {events.length === 0 ? (
           <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             {t("telemetry.empty")}
           </div>
         ) : (
-          <ScrollArea className="h-[360px] min-h-0 flex-1 pr-3">
+          <ScrollArea className="min-h-0 flex-1 pr-3">
             <div className="space-y-2">
               {events.map((event) => (
                 <article key={event.id} className="rounded-xl border p-3">

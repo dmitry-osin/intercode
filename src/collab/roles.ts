@@ -37,10 +37,13 @@ export function sessionLink(meta: SessionMeta, role: Role): string {
   return url.href;
 }
 
-const palette = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2", "#be185d", "#4f46e5"];
+/** Фиксированный цвет-маркер роли — используется для кружка рядом с именем участника. */
+const roleColors: Record<Role, string> = {
+  interviewer: "#2563eb", // синий
+  interviewee: "#16a34a", // зелёный
+  viewer: "#9333ea", // фиолетовый
+};
 
-export function colorForClient(clientId: string): string {
-  let hash = 0;
-  for (const char of clientId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return palette[hash % palette.length];
+export function roleColor(role: Role): string {
+  return roleColors[role];
 }

@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { languageIds, languageLabels, starterCode, type LanguageId } from "@/editor/languages";
 import { randomId } from "@/lib/id";
+import { generateParticipantName } from "@/lib/names";
 import { createServerSession, probeServerApi } from "@/collab/api";
 import { loadRoleName, saveDisplayName, saveRoleName, saveSessionMeta } from "@/session/store";
 import { defaultAiPromptFor, type RoomConfig, type SessionMeta } from "@/types";
@@ -37,7 +38,7 @@ export default function HomePage() {
   const [, navigate] = useLocation();
   const { t, locale } = useI18n();
   const [title, setTitle] = useState(() => generatedSessionTitle());
-  const [hostName, setHostName] = useState(() => loadRoleName("interviewer", t("defaultName.interviewer")));
+  const [hostName, setHostName] = useState(() => loadRoleName("interviewer", generateParticipantName()));
   const [language, setLanguage] = useState<LanguageId>("typescript");
   const [initialCode, setInitialCode] = useState(starterCode.typescript);
   const [copyBlocked, setCopyBlocked] = useState(true);

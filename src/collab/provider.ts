@@ -11,7 +11,7 @@ import {
 import { loadSessionMeta, saveSessionMeta } from "@/session/store";
 import { randomId, uuid } from "@/lib/id";
 import { defaultRoomConfig, type Role, type SessionMeta, type TelemetryEvent } from "@/types";
-import { colorForClient, validateToken } from "./roles";
+import { roleColor, validateToken } from "./roles";
 import { fetchServerSession, probeServerApi, serverWsUrl, SessionFetchError } from "./api";
 
 export type TransportMode = "local" | "server";
@@ -92,7 +92,7 @@ export class CollabSession {
     this.token = options.token;
     this.displayName = options.displayName || `Участник-${randomId(4)}`;
     this.meta = meta;
-    this.color = colorForClient(this.clientId);
+    this.color = roleColor(this.role);
   }
 
   static async create(options: CreateCollabOptions): Promise<CollabSession> {
