@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ArrowRight, Code2, ShieldCheck } from "lucide-react";
-import { useLocation } from "wouter";
+import { ArrowRight, Code2, Info, ShieldCheck } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 import { uniqueNamesGenerator, adjectives, colors, animals } from "unique-names-generator";
 import { useI18n } from "@/app/i18n";
@@ -113,6 +113,12 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+              <Link href="/about">
+                <Info className="h-4 w-4" />
+                {t("about.nav")}
+              </Link>
+            </Button>
             <LocaleToggle />
             <ThemeToggle compact />
           </div>

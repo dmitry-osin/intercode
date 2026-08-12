@@ -107,6 +107,10 @@ export const ru = {
   "room.error.notFound.title": "Комната недоступна локально",
   "room.error.connect.title": "Не удалось подключиться",
   "room.error.connect.fallback": "Проверьте ссылку и доступность сервера.",
+  "room.nameEdit.hint": "Нажмите, чтобы изменить имя",
+  "room.antiCheat.trigger": "Настройки античита",
+  "room.antiCheat.title": "Настройки в реальном времени",
+  "room.antiCheat.subtitle": "Изменения применяются сразу для всех подключённых участников.",
 
   // Телеметрия
   "telemetry.title": "Телеметрия кандидата",
@@ -199,6 +203,26 @@ export const ru = {
   // 404
   "notFound.title": "Страница не найдена",
   "notFound.message": "Проверьте hash-ссылку сессии.",
+
+  // О проекте
+  "about.nav": "О проекте",
+  "about.back": "На главную",
+  "about.title": "О проекте IntQst",
+  "about.subtitle":
+    "Комната для live-собеседований по коду: совместный редактор, роли по ссылкам и телеметрия попыток списывания — без аккаунтов и внешних сервисов.",
+  "about.features.title": "Возможности",
+  "about.features.editor.title": "Совместный редактор",
+  "about.features.editor.desc": "CodeMirror 6 + Yjs: код и курсоры синхронизируются в реальном времени.",
+  "about.features.roles.title": "Роли по ссылкам",
+  "about.features.roles.desc": "Интервьюер, собеседуемый и наблюдатель — доступ по токену в ссылке, без регистрации.",
+  "about.features.telemetry.title": "Анти-чит телеметрия",
+  "about.features.telemetry.desc":
+    "Копирование, вставка, переключение вкладок, DevTools и другие сигналы — в реальном времени, с настройками на лету.",
+  "about.features.selfhosted.title": "Self-hosted",
+  "about.features.selfhosted.desc": "Свой сервер на Node.js + WebSocket, без Cloudflare и сторонних облаков.",
+  "about.stack.title": "Технологии",
+  "about.author.title": "Автор",
+  "about.author.github": "Открыть профиль на GitHub",
 } as const;
 
 export type Dictionary = { [K in keyof typeof ru]: string };

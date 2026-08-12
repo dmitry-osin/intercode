@@ -3,6 +3,7 @@ import { I18nProvider, useI18n } from "@/app/i18n";
 import { useIntercodeHashLocation } from "@/app/router";
 import { ThemeProvider } from "@/app/theme";
 import { Toaster } from "@/components/ui/sonner";
+import AboutPage from "@/pages/AboutPage";
 import ExportPage from "@/pages/ExportPage";
 import HomePage from "@/pages/HomePage";
 import LobbyPage from "@/pages/LobbyPage";
@@ -16,6 +17,7 @@ export default function App() {
         <Router hook={useIntercodeHashLocation}>
           <Switch>
             <Route path="/" component={HomePage} />
+            <Route path="/about" component={AboutPage} />
             <Route path="/lobby/:id">{(params) => <LobbyPage id={params.id} />}</Route>
             <Route path="/s/:id">{(params) => <SessionPage id={params.id} />}</Route>
             <Route path="/export/:id">{(params) => <ExportPage id={params.id} />}</Route>

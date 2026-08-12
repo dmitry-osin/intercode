@@ -97,3 +97,30 @@ export function sanitizeDisplayName(raw, fallback) {
   const trimmed = raw.trim().slice(0, MAX_NAME_LEN);
   return trimmed || fallback;
 }
+
+/** Ключи RoomConfig, которые кандидат/наблюдатель могут получить с сервера
+ *  и которые интервьюер может менять в реальном времени из комнаты (§ анти-чит UI). */
+export const CONFIG_KEYS = [
+  "copyBlocked",
+  "clipboardObfuscation",
+  "clipboardCorruption",
+  "aiPromptInjection",
+  "pasteThresholdAlert",
+  "devtoolsHeuristics",
+];
+
+/** Валидация патча RoomConfig: пропускаем только известные булевы ключи
+ *  плюс текст AI-инструкции (обрезаем по длине). Используется и при создании
+ *  сессии, и при live-обновлении настроек интервьюером через WS. */
+export function sanitizeConfig(raw) {
+  const config = {};
+  if (raw && typeof raw === "object") {
+    for (const key of CONFIG_KEYS) {
+      if (typeof raw[key] === "boolean") config[key] = raw[key];
+    }
+    if (typeof raw.aiPromptText === "string") {
+      config.aiPromptText = raw.aiPromptText.slice(0, 4000);
+    }
+  }
+  return config;
+}

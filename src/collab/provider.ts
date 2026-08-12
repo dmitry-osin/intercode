@@ -10,7 +10,7 @@ import {
 } from "y-protocols/awareness";
 import { loadSessionMeta, saveSessionMeta } from "@/session/store";
 import { randomId, uuid } from "@/lib/id";
-import { defaultRoomConfig, type Role, type SessionMeta, type TelemetryEvent } from "@/types";
+import { defaultRoomConfig, type Role, type RoomConfig, type SessionMeta, type TelemetryEvent } from "@/types";
 import { roleColor, validateToken } from "./roles";
 import { fetchServerSession, probeServerApi, serverWsUrl, SessionFetchError } from "./api";
 
@@ -30,6 +30,11 @@ interface CreateCollabOptions {
   role: Role;
   token: string;
   displayName: string;
+  /** Позволяет отменить создание сессии, если эффект-инициатор уже размонтирован
+   *  (например, двойной вызов эффектов в React.StrictMode в dev-режиме). Без этого
+   *  успевали открыться лишний WebSocket/BroadcastChannel и уйти паразитные события
+   *  session_join/session_leave буквально в одну секунду при входе в комнату. */
+  signal?: AbortSignal;
 }
 
 interface LocalMessage {
@@ -48,9 +53,9 @@ type StatusHandler = (status: CollabStatus) => void;
 type MetaHandler = (meta: SessionMeta) => void;
 
 export class CollabError extends Error {
-  readonly code: "not_found" | "bad_token" | "transport";
+  readonly code: "not_found" | "bad_token" | "transport" | "aborted";
 
-  constructor(code: "not_found" | "bad_token" | "transport", message: string) {
+  constructor(code: "not_found" | "bad_token" | "transport" | "aborted", message: string) {
     super(message);
     this.code = code;
   }
@@ -85,6 +90,11 @@ export class CollabSession {
   private readonly metaHandlers = new Set<MetaHandler>();
   private status: CollabStatus = { connected: false, mode: "local", error: null };
   private closed = false;
+  /** В local-режиме session_join шлётся с небольшой задержкой (см. connectLocal).
+   *  Флаг + id таймера нужны, чтобы close() не отправлял "leave" без предшествующего
+   *  "join" и чтобы отменённый до срабатывания таймера join не ушёл в эфир постфактум. */
+  private joined = false;
+  private joinTimer: number | null = null;
 
   private constructor(options: CreateCollabOptions, meta: SessionMeta) {
     this.sessionId = options.sessionId;
@@ -96,14 +106,23 @@ export class CollabSession {
   }
 
   static async create(options: CreateCollabOptions): Promise<CollabSession> {
+    const ensureAlive = () => {
+      if (options.signal?.aborted) {
+        throw new CollabError("aborted", "Подключение отменено.");
+      }
+    };
+
     let meta = loadSessionMeta(options.sessionId);
     let mode: TransportMode = "local";
 
+    ensureAlive();
     if (await probeServerApi()) {
       // Server-режим (self-hosted): мету и права проверяет сервер по токену.
       mode = "server";
+      ensureAlive();
       try {
         const remote = await fetchServerSession(options.sessionId, options.role, options.token);
+        ensureAlive();
         // Сливаем токены с локальной копией, чтобы не затереть ссылки лобби интервьюера.
         const merged: SessionMeta = {
           ...remote,
@@ -118,6 +137,7 @@ export class CollabSession {
         meta = merged;
         saveSessionMeta(merged);
       } catch (error) {
+        if (error instanceof CollabError) throw error;
         if (error instanceof SessionFetchError) {
           throw new CollabError(
             error.code === "transport" ? "transport" : error.code,
@@ -153,6 +173,11 @@ export class CollabSession {
       config: defaultRoomConfig,
       tokens: { interviewer: "", interviewee: "", viewer: "" },
     };
+
+    // Последняя проверка перед тем, как реально открыть WebSocket/BroadcastChannel:
+    // после этой точки подключение уже видно серверу/другим вкладкам, поэтому
+    // отменённый (disposed) эффект не должен доходить сюда.
+    ensureAlive();
 
     const session = new CollabSession(options, meta);
     if (mode === "server") session.connectServer();
@@ -192,8 +217,9 @@ export class CollabSession {
   sendMeta(meta: SessionMeta): void {
     this.emitMeta(meta);
     if (this.mode === "server") {
-      // На сервере мету меняет только интервьюер; шлём патч языка.
-      this.sendServerJson({ type: "meta", patch: { language: meta.language } });
+      // На сервере мету меняет только интервьюер; шлём патч языка и конфигурации
+      // античита/телеметрии — сервер применит его к комнате и разошлёт остальным.
+      this.sendServerJson({ type: "meta", patch: { language: meta.language, config: meta.config } });
       return;
     }
     this.channel?.postMessage({ kind: "meta", meta, sender: this.clientId } satisfies LocalMessage);
@@ -227,7 +253,13 @@ export class CollabSession {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    if (this.mode !== "server") {
+    if (this.joinTimer !== null) {
+      window.clearTimeout(this.joinTimer);
+      this.joinTimer = null;
+    }
+    // Leave-событие имеет смысл, только если мы успели объявить join: иначе для
+    // других участников/сервера мы никогда не "заходили" в комнату.
+    if (this.mode !== "server" && this.joined) {
       try {
         this.sendTelemetry(this.presenceEvent("session_leave"));
       } catch {
@@ -267,10 +299,13 @@ export class CollabSession {
     this.pushLocalAwareness();
     this.channel.postMessage({ kind: "sync-request", sender: this.clientId } satisfies LocalMessage);
 
-    window.setTimeout(() => {
+    this.joinTimer = window.setTimeout(() => {
+      this.joinTimer = null;
+      if (this.closed) return;
       if (this.ytext.length === 0 && this.role === "interviewer") {
         this.doc.transact(() => this.ytext.insert(0, this.meta.initialCode), "initial");
       }
+      this.joined = true;
       this.sendTelemetry(this.presenceEvent("session_join"));
     }, 180);
 
@@ -447,9 +482,16 @@ export class CollabSession {
       }
       case "meta": {
         if (message.patch && typeof message.patch === "object") {
-          const patch = message.patch as { language?: string; status?: "active" | "ended" };
+          const patch = message.patch as {
+            language?: string;
+            status?: "active" | "ended";
+            config?: Partial<RoomConfig>;
+          };
           if (patch.language) this.meta.language = patch.language;
           if (patch.status) this.meta.status = patch.status;
+          if (patch.config && typeof patch.config === "object") {
+            Object.assign(this.meta.config, patch.config);
+          }
           this.emitMeta(this.meta);
         }
         break;

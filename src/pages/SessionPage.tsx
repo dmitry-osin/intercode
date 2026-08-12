@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, DoorOpen, Download, Loader2, Lock, Plus, Radio, Users } from "lucide-react";
+import { Check, Copy, DoorOpen, Download, Loader2, Lock, Pencil, Plus, Radio, Users } from "lucide-react";
 import { useLocation, useSearchParams } from "wouter";
 import { toast } from "sonner";
 import type { EditorView } from "@codemirror/view";
@@ -26,6 +26,7 @@ import {
 } from "@/session/store";
 import { attachTelemetryCollector } from "@/telemetry/collector";
 import { useTelemetryFeed } from "@/telemetry/feed";
+import { AntiCheatSettings } from "@/ui/AntiCheatSettings";
 import { ParticipantsBar } from "@/ui/ParticipantsBar";
 import { RoleGuard } from "@/ui/RoleGuard";
 import { TelemetryPanel } from "@/ui/TelemetryPanel";
@@ -44,7 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { Participant, Role, SessionMeta } from "@/types";
+import type { Participant, Role, RoomConfig, SessionMeta } from "@/types";
 import { roleLabelKeys } from "@/types";
 
 const roleOrder: Role[] = ["interviewer", "interviewee", "viewer"];
@@ -117,6 +118,11 @@ export default function SessionPage({ id }: { id: string }) {
     let disposed = false;
     let session: CollabSession | null = null;
     const detach: Array<() => void> = [];
+    // Абортим создание сессии, если эффект размонтировался раньше, чем CollabSession.create
+    // успел договориться о подключении — иначе в React.StrictMode (двойной вызов эффектов
+    // в dev) успевает открыться и тут же закрыться лишнее подключение, а вместе с ним
+    // уходят паразитные события session_join/session_leave в телеметрию.
+    const controller = new AbortController();
 
     const connect = async () => {
       try {
@@ -125,7 +131,7 @@ export default function SessionPage({ id }: { id: string }) {
           feed.clear();
           feed.addEvents(loadTelemetryHistory(id));
         }
-        session = await CollabSession.create({ sessionId: id, role, token, displayName });
+        session = await CollabSession.create({ sessionId: id, role, token, displayName, signal: controller.signal });
         if (disposed) {
           session.close();
           return;
@@ -154,7 +160,11 @@ export default function SessionPage({ id }: { id: string }) {
         detach.push(() => session?.awareness.off("change", updateParticipants));
         updateParticipants();
       } catch (connectError) {
-        if (!disposed) setError(errorMessage(connectError, t));
+        // "aborted" — это ожидаемая отмена (эффект размонтировался раньше, чем
+        // подключение успело завершиться), а не реальная ошибка для пользователя.
+        if (!disposed && !(connectError instanceof CollabError && connectError.code === "aborted")) {
+          setError(errorMessage(connectError, t));
+        }
       }
     };
 
@@ -162,6 +172,7 @@ export default function SessionPage({ id }: { id: string }) {
 
     return () => {
       disposed = true;
+      controller.abort();
       detach.forEach((off) => off());
       session?.close();
       setCollab(null);
@@ -190,6 +201,16 @@ export default function SessionPage({ id }: { id: string }) {
     const nextMeta = { ...meta, language: nextLanguage };
     setMeta(nextMeta);
     setLanguage(nextLanguage);
+    saveSessionMeta(nextMeta);
+    collab.sendMeta(nextMeta);
+  };
+
+  // Настройки античита/телеметрии меняются интервьюером в реальном времени:
+  // конфиг уходит через collab.sendMeta и переприменяется в детекторах кандидата.
+  const changeConfig = (nextConfig: RoomConfig) => {
+    if (!collab || !meta || !interviewer) return;
+    const nextMeta = { ...meta, config: nextConfig };
+    setMeta(nextMeta);
     saveSessionMeta(nextMeta);
     collab.sendMeta(nextMeta);
   };
@@ -252,31 +273,42 @@ export default function SessionPage({ id }: { id: string }) {
   return (
     <main className="h-screen overflow-hidden">
       <div className="mx-auto flex h-full max-w-[1500px] flex-col px-4 py-4 sm:px-6">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-bold">{meta.title}</h1>
-              <Badge variant={status.connected ? "default" : "destructive"} className="gap-1">
-                <Radio className="h-3 w-3" />
-                {status.connected
-                  ? status.mode === "local"
-                    ? t("room.status.local")
-                    : t("room.status.server")
-                  : t("room.status.offline")}
-              </Badge>
-              {readOnly && (
-                <Badge variant="outline" className="gap-1">
-                  <Lock className="h-3 w-3" />
-                  {t("room.readOnly")}
+        <header className="flex flex-col gap-3 rounded-2xl border bg-card p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-bold">{meta.title}</h1>
+                <Badge variant={status.connected ? "default" : "destructive"} className="gap-1">
+                  <Radio className="h-3 w-3" />
+                  {status.connected
+                    ? status.mode === "local"
+                      ? t("room.status.local")
+                      : t("room.status.server")
+                    : t("room.status.offline")}
                 </Badge>
-              )}
+                {readOnly && (
+                  <Badge variant="outline" className="gap-1">
+                    <Lock className="h-3 w-3" />
+                    {t("room.readOnly")}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {t("common.session")} {id} · {status.error ?? t("room.syncActive")}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {t("common.session")} {id} · {status.error ?? t("room.syncActive")}
-            </p>
+            {/* Небольшой блок вверху справа: язык интерфейса и тема, отдельно от основных контролов. */}
+            <div className="flex shrink-0 items-center gap-1.5">
+              <LocaleToggle />
+              <ThemeToggle compact />
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-md border bg-background pl-2.5">
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <div
+              className="group flex items-center gap-1.5 rounded-lg border border-dashed bg-background pl-2.5 transition-colors hover:border-primary/50 focus-within:border-solid focus-within:border-primary"
+              title={t("room.nameEdit.hint")}
+            >
               <span
                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: roleColor(role) }}
@@ -286,45 +318,51 @@ export default function SessionPage({ id }: { id: string }) {
                 value={displayName}
                 onChange={(event) => changeName(event.target.value)}
                 placeholder={t("room.namePlaceholder")}
-                className="h-8 w-32 border-0 px-1.5 shadow-none focus-visible:ring-0"
+                className="h-8 w-32 border-0 bg-transparent px-1.5 shadow-none focus-visible:ring-0"
               />
-              <span className="shrink-0 pr-2.5 text-xs whitespace-nowrap text-muted-foreground">
-                ({t(roleLabelKeys[role])})
+              <Pencil
+                className="h-3 w-3 shrink-0 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                aria-hidden="true"
+              />
+              <span className="shrink-0 rounded-r-md bg-muted px-2.5 py-1.5 text-xs whitespace-nowrap text-muted-foreground">
+                {t(roleLabelKeys[role])}
               </span>
             </div>
-            <LocaleToggle />
-            <ThemeToggle compact />
-            {interviewer && (
-              <>
-                {roleOrder.map((linkRole) => (
-                  <Button
-                    key={linkRole}
-                    variant="outline"
-                    onClick={() => void copyRoleLink(linkRole)}
-                    title={t("room.copyLinkFor", { role: t(roleLabelKeys[linkRole]) })}
-                  >
-                    {copiedRole === linkRole ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {t(roleLabelKeys[linkRole])}
+
+            <div className="flex flex-wrap items-center gap-2">
+              {interviewer && <AntiCheatSettings config={meta.config} onChange={changeConfig} />}
+              {interviewer && (
+                <>
+                  {roleOrder.map((linkRole) => (
+                    <Button
+                      key={linkRole}
+                      variant="outline"
+                      onClick={() => void copyRoleLink(linkRole)}
+                      title={t("room.copyLinkFor", { role: t(roleLabelKeys[linkRole]) })}
+                    >
+                      {copiedRole === linkRole ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {t(roleLabelKeys[linkRole])}
+                    </Button>
+                  ))}
+                  <Button variant="outline" onClick={() => void copyFinalCode()}>
+                    <Copy className="h-4 w-4" />
+                    {t("common.code")}
                   </Button>
-                ))}
-                <Button variant="outline" onClick={() => void copyFinalCode()}>
-                  <Copy className="h-4 w-4" />
-                  {t("common.code")}
-                </Button>
-                <Button variant="outline" onClick={() => navigate(`/export/${id}`)}>
-                  <Download className="h-4 w-4" />
-                  {t("common.export")}
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/")}>
-                  <Plus className="h-4 w-4" />
-                  {t("common.newSession")}
-                </Button>
-                <Button variant="destructive" onClick={() => setConfirmClose(true)}>
-                  <DoorOpen className="h-4 w-4" />
-                  {t("common.close")}
-                </Button>
-              </>
-            )}
+                  <Button variant="outline" onClick={() => navigate(`/export/${id}`)}>
+                    <Download className="h-4 w-4" />
+                    {t("common.export")}
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate("/")}>
+                    <Plus className="h-4 w-4" />
+                    {t("common.newSession")}
+                  </Button>
+                  <Button variant="destructive" onClick={() => setConfirmClose(true)}>
+                    <DoorOpen className="h-4 w-4" />
+                    {t("common.close")}
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </header>
 

@@ -8,6 +8,7 @@ import {
   newSessionId,
   newToken,
   roleFromCode,
+  sanitizeConfig,
   sanitizeDisplayName,
 } from "./protocol.js";
 
@@ -29,15 +30,6 @@ const LANGUAGES = new Set([
   "sql",
   "kotlin",
 ]);
-
-const CONFIG_KEYS = [
-  "copyBlocked",
-  "clipboardObfuscation",
-  "clipboardCorruption",
-  "aiPromptInjection",
-  "pasteThresholdAlert",
-  "devtoolsHeuristics",
-];
 
 const store = new SessionStore(DATA_DIR);
 const manager = new RoomManager(store);
@@ -78,19 +70,6 @@ function authorize(meta, url) {
   if (!role || !token) return null;
   if (meta?.tokens?.[role] !== token) return null;
   return role;
-}
-
-function sanitizeConfig(raw) {
-  const config = {};
-  if (raw && typeof raw === "object") {
-    for (const key of CONFIG_KEYS) {
-      if (typeof raw[key] === "boolean") config[key] = raw[key];
-    }
-    if (typeof raw.aiPromptText === "string") {
-      config.aiPromptText = raw.aiPromptText.slice(0, 4000);
-    }
-  }
-  return config;
 }
 
 /** Мета без токенов — для кандидата/наблюдателя. */
@@ -189,6 +168,9 @@ async function handleApi(req, res, url) {
       const patch = {};
       if (typeof body.status === "string" && ["active", "ended"].includes(body.status)) {
         patch.status = body.status;
+        // Фиксируем момент завершения — от него считается ENDED_SESSION_TTL_MS
+        // до удаления файлов сессии (см. RoomManager.purgeExpiredSessions в rooms.js).
+        if (body.status === "ended" && !meta.closedAt) patch.closedAt = Date.now();
       }
       if (typeof body.language === "string" && LANGUAGES.has(body.language)) {
         patch.language = body.language;
@@ -418,6 +400,9 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 await store.init();
+// Разовый прогон очистки сразу после старта — подчищаем то, что накопилось,
+// пока сервер не работал (дальше — по таймеру, см. RoomManager.purgeExpiredSessions).
+void manager.purgeExpiredSessions();
 server.listen(PORT, () => {
   console.log(`[intercode] server listening on :${PORT}`);
   console.log(`[intercode] data dir: ${DATA_DIR}`);

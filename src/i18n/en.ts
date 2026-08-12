@@ -107,6 +107,10 @@ export const en: Dictionary = {
   "room.error.notFound.title": "Room is not available locally",
   "room.error.connect.title": "Failed to connect",
   "room.error.connect.fallback": "Check the link and server availability.",
+  "room.nameEdit.hint": "Click to rename",
+  "room.antiCheat.trigger": "Anti-cheat settings",
+  "room.antiCheat.title": "Real-time settings",
+  "room.antiCheat.subtitle": "Changes apply immediately for all connected participants.",
 
   // Telemetry
   "telemetry.title": "Candidate telemetry",
@@ -199,4 +203,24 @@ export const en: Dictionary = {
   // 404
   "notFound.title": "Page not found",
   "notFound.message": "Check the session hash link.",
+
+  // About
+  "about.nav": "About",
+  "about.back": "Home",
+  "about.title": "About IntQst",
+  "about.subtitle":
+    "A room for live coding interviews: a collaborative editor, role-based links and cheating-attempt telemetry — no accounts, no third-party services.",
+  "about.features.title": "Features",
+  "about.features.editor.title": "Collaborative editor",
+  "about.features.editor.desc": "CodeMirror 6 + Yjs: code and cursors sync in real time.",
+  "about.features.roles.title": "Role-based links",
+  "about.features.roles.desc": "Interviewer, interviewee and viewer — access via a token in the link, no sign-up.",
+  "about.features.telemetry.title": "Anti-cheat telemetry",
+  "about.features.telemetry.desc":
+    "Copy, paste, tab switching, DevTools and other signals — in real time, with settings adjustable on the fly.",
+  "about.features.selfhosted.title": "Self-hosted",
+  "about.features.selfhosted.desc": "Your own Node.js + WebSocket server, no Cloudflare or third-party clouds.",
+  "about.stack.title": "Tech stack",
+  "about.author.title": "Author",
+  "about.author.github": "Open GitHub profile",
 };

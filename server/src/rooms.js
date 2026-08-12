@@ -7,6 +7,7 @@ import {
   maxSeverity,
   newEventId,
   normalizeTelemetryEvent,
+  sanitizeConfig,
   TELEMETRY_BASE_SEVERITY,
 } from "./protocol.js";
 
@@ -17,7 +18,15 @@ const MESSAGE_QUERY_AWARENESS = 3;
 
 const TELEMETRY_CAP = 5000;
 const MAX_CONNS_PER_ROOM = 20;
-const ROOM_IDLE_TTL_MS = 60_000;
+// Комната без единого участника выгружается из памяти (RAM) через час простоя,
+// и одновременно её сессия автоматически помечается завершённой (см. Room.markEndedByIdle
+// и RoomManager.gc) — считаем интервью брошенным, если час никто не подключался.
+const ROOM_IDLE_TTL_MS = 60 * 60 * 1000;
+const GC_INTERVAL_MS = 5 * 60 * 1000;
+// Файлы завершённой сессии (meta/doc/telemetry) безвозвратно удаляются с диска
+// через 12 часов после завершения — см. RoomManager.purgeExpiredSessions.
+const ENDED_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const PURGE_INTERVAL_MS = 30 * 60 * 1000;
 const DOC_SAVE_DEBOUNCE_MS = 2_000;
 const TELEMETRY_FLUSH_MS = 1_000;
 
@@ -180,6 +189,18 @@ export class Room {
     };
   }
 
+  /** Комната простаивала без единого участника дольше ROOM_IDLE_TTL_MS — считаем
+   *  интервью брошенным (никто явно не завершал сессию через UI) и помечаем её
+   *  завершённой сами, с closedAt = сейчас. Дальше файлы подберёт периодический
+   *  RoomManager.purgeExpiredSessions() спустя ENDED_SESSION_TTL_MS. Участников
+   *  в комнате уже нет, поэтому broadcastSessionEnded() не нужен. */
+  async markEndedByIdle() {
+    if (this.meta.status === "ended") return;
+    this.meta.status = "ended";
+    this.meta.closedAt = Date.now();
+    await this.store.saveSessionMeta(this.meta);
+  }
+
   sendTelemetryHistory(ws) {
     const pageSize = 500;
     const events = this.telemetry;
@@ -235,17 +256,36 @@ export class Room {
         sendJson(ws, { type: "pong", serverTime: Date.now() });
         break;
       case "meta": {
-        // Метаданные сессии (язык и т.п.) меняет только интервьюер.
+        // Метаданные сессии (язык, статус и настройки анти-чита) меняет только интервьюер.
         if (conn.role !== "interviewer" || !msg.patch || typeof msg.patch !== "object") break;
         const patch = {};
         if (typeof msg.patch.language === "string") patch.language = msg.patch.language;
         if (typeof msg.patch.status === "string" && ["active", "ended"].includes(msg.patch.status)) {
           patch.status = msg.patch.status;
+          // Фиксируем момент завершения — от него считается ENDED_SESSION_TTL_MS
+          // до удаления файлов сессии (см. RoomManager.purgeExpiredSessions).
+          if (msg.patch.status === "ended" && !this.meta.closedAt) patch.closedAt = Date.now();
         }
-        if (Object.keys(patch).length === 0) break;
+        // Настройки анти-чита/телеметрии применяются в реальном времени: обновляем
+        // и живой config комнаты (используется в normalizeTelemetryEvent), и мету
+        // для персистентности; клиентам рассылаем только валидированный патч.
+        let configPatch = null;
+        if (msg.patch.config && typeof msg.patch.config === "object") {
+          const sanitized = sanitizeConfig(msg.patch.config);
+          if (Object.keys(sanitized).length > 0) configPatch = sanitized;
+        }
+        if (Object.keys(patch).length === 0 && !configPatch) break;
         Object.assign(this.meta, patch);
+        if (configPatch) {
+          this.meta.config = { ...this.meta.config, ...configPatch };
+          this.config = { ...this.config, ...configPatch };
+        }
         void this.store.saveSessionMeta(this.meta);
-        broadcastJson(this, { type: "meta", patch }, () => true);
+        broadcastJson(
+          this,
+          { type: "meta", patch: configPatch ? { ...patch, config: configPatch } : patch },
+          () => true,
+        );
         break;
       }
       default:
@@ -386,8 +426,10 @@ export class RoomManager {
   constructor(store) {
     this.store = store;
     this.rooms = new Map(); // id -> Room
-    this._gcTimer = setInterval(() => void this.gc(), 15_000);
+    this._gcTimer = setInterval(() => void this.gc(), GC_INTERVAL_MS);
     this._gcTimer.unref?.();
+    this._purgeTimer = setInterval(() => void this.purgeExpiredSessions(), PURGE_INTERVAL_MS);
+    this._purgeTimer.unref?.();
   }
 
   /** Загрузить (или восстановить с диска) комнату. */
@@ -411,18 +453,46 @@ export class RoomManager {
     broadcastJson(room, { type: "meta", patch }, () => true);
   }
 
+  /** Комнаты без единого участника дольше ROOM_IDLE_TTL_MS выгружаются из RAM
+   *  (Yjs-документ, awareness) и одновременно помечаются завершёнными — см.
+   *  Room.markEndedByIdle. Данные на диске при этом не удаляются, комната по-прежнему
+   *  восстановима (для экспорта/просмотра истории), просто больше не принимает новых
+   *  подключений (session_closed). Реальное удаление файлов — задача
+   *  purgeExpiredSessions() спустя ENDED_SESSION_TTL_MS после closedAt. */
   async gc() {
     const now = Date.now();
     for (const [id, room] of this.rooms) {
       if (room.conns.size === 0 && room.idleSince && now - room.idleSince > ROOM_IDLE_TTL_MS) {
         this.rooms.delete(id);
+        await room.markEndedByIdle();
         await room.dispose();
+      }
+    }
+  }
+
+  /** Раз в PURGE_INTERVAL_MS сканирует ВСЕ сохранённые на диске сессии (а не только
+   *  загруженные в память комнаты) и безвозвратно удаляет файлы (meta/doc/telemetry)
+   *  тех, что завершены (status === "ended") более ENDED_SESSION_TTL_MS назад —
+   *  неважно, завершились ли они вручную через UI или автоматически по простою
+   *  (Room.markEndedByIdle). Активные (status === "active") сессии никогда не трогаем. */
+  async purgeExpiredSessions() {
+    const now = Date.now();
+    const ids = await this.store.listSessionIds();
+    for (const id of ids) {
+      // Сессия сейчас загружена в память — её жизненным циклом занимается gc().
+      if (this.rooms.has(id)) continue;
+      const meta = await this.store.loadSessionMeta(id);
+      if (!meta || meta.status !== "ended") continue;
+      const endedAt = meta.closedAt ?? meta.createdAt;
+      if (now - endedAt > ENDED_SESSION_TTL_MS) {
+        await this.store.deleteSession(id);
       }
     }
   }
 
   async shutdown() {
     clearInterval(this._gcTimer);
+    clearInterval(this._purgeTimer);
     for (const room of this.rooms.values()) {
       await room.dispose();
     }
