@@ -1,0 +1,7 @@
+# Скрипты и конфиги для деплоя на Linux VPS должны всегда сохранять LF,
+# независимо от core.autocrlf на машине разработчика (Windows) — иначе на
+# сервере они не запустятся (`$'\r': command not found`, "bad interpreter").
+*.sh text eol=lf
+Dockerfile text eol=lf
+deploy/*.conf text eol=lf
+deploy/*.conf.template text eol=lf

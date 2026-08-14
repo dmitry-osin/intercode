@@ -6,6 +6,9 @@
 # server — Node.js: WebSocket (Yjs sync), телеметрия, HTTP API сессий
 #
 # Данные (сессии, документы, телеметрия) — в volume server-data.
+#
+# HTTPS настраивается одной командой — см. deploy/README.md:
+#   ./deploy/setup-ssl.sh <домен> <email>
 
 services:
   server:
@@ -25,13 +28,26 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
-      # Раскомментируйте после настройки TLS (см. deploy/README.md):
+      # Открывается автоматически скриптом deploy/setup-ssl.sh:
       # - "443:443"
-    # volumes:
-      # Сертификаты certbot для HTTPS-блока в deploy/nginx.conf:
-      # - /etc/letsencrypt:/etc/letsencrypt:ro
+    volumes:
+      # Общие с certbot (см. deploy/README.md и deploy/setup-ssl.sh):
+      - certbot-www:/var/www/certbot     # ACME HTTP-01 challenge
+      - certbot-conf:/etc/letsencrypt:ro # сертификаты для HTTPS-блока в deploy/nginx.conf
     depends_on:
       - server
 
+  # Разовые команды выпуска/продления сертификата (не запускается через `up`,
+  # только через `docker compose run --rm certbot ...` — см. deploy/setup-ssl.sh
+  # и deploy/README.md). profiles: [tools] — исключает сервис из `docker compose up`.
+  certbot:
+    image: certbot/certbot
+    profiles: ["tools"]
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+
 volumes:
   server-data:
+  certbot-www:
+  certbot-conf:

@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# InterCode — nginx: HTTPS-конфигурация (production).
+#
+# Это ШАБЛОН: единственная переменная — ${DOMAIN}, подставляется скриптом
+# deploy/setup-ssl.sh (bash-подстановкой, без внешних зависимостей вроде
+# envsubst/gettext). Все остальные $-переменные (host, request_uri,
+# remote_addr и т.п.) — это переменные nginx, они должны остаться как есть.
+#
+# Файл генерирует deploy/setup-ssl.sh → deploy/nginx.conf (с бэкапом
+# исходного deploy/nginx.conf в deploy/nginx.conf.bak). Руками этот файл
+# не редактируйте результат — правьте шаблон и перезапустите скрипт.
+# ─────────────────────────────────────────────────────────────────────────────
+
+upstream intercode_backend {
+    server server:8090;
+}
+
+# HTTP: редирект на HTTPS. ACME HTTP-01 challenge остаётся доступным —
+# он нужен и для первого выпуска сертификата, и для последующих продлений.
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_session_timeout 1d;
+    ssl_session_cache   shared:intercode_ssl:10m;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Статика фронтенда с content-hashed именами — агрессивный кэш.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # HTTP API сессий: создание, метаданные, экспорт снапшотов.
+    location /api/ {
+        proxy_pass http://intercode_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket комнат: /ws/<sessionId>?r=..&k=..&name=..
+    location /ws/ {
+        proxy_pass http://intercode_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Долгоживущие соединения: сервер шлёт ping каждые 15 c,
+        # но даём запас, чтобы не рвать сессию посреди собеседования.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # SPA: маршруты в хэше (#/s/<id>), поэтому достаточно отдавать index.html.
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+    gzip_min_length 1024;
+
+    # Базовые security-заголовки.
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+}

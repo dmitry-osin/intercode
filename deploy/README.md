@@ -43,32 +43,92 @@ curl http://localhost/api/healthz
 ## HTTPS (рекомендуется)
 
 Без TLS токены в ссылках и код передаются открытым текстом — для реальных
-собеседований включите HTTPS.
+собеседований включите HTTPS. Домен должен уже указывать A-записью на IP
+этого VPS.
+
+### Автоматически (одна команда)
 
 ```bash
-# 1. Домен должен указывать на VPS (A-запись). Порт 80 открыт.
+chmod +x deploy/setup-ssl.sh
+./deploy/setup-ssl.sh intercode.example.com you@example.com
+```
+
+Скрипт сам, без дальнейших ручных действий:
+
+1. поднимает docker compose стек (HTTP), если он ещё не запущен;
+2. мягко проверяет, что домен резолвится на IP этого сервера (предупреждает,
+   не блокирует — вдруг DNS ещё не обновился);
+3. получает сертификат Let's Encrypt через `certbot` (webroot-плагин, без
+   даунтайма — порт 80 продолжает работать);
+4. генерирует `deploy/nginx.conf` из `deploy/nginx.ssl.conf.template` с вашим
+   доменом (бэкап предыдущего конфига — `deploy/nginx.conf.bak`), пересобирает
+   и перезапускает `web`;
+5. открывает порт `443` в `docker-compose.yml`, если он ещё закрыт;
+6. регистрирует задачу в `crontab`: дважды в день (03:17 и 15:17) продлевает
+   сертификат и перечитывает конфиг nginx — **дальше делать вообще ничего не
+   нужно**, сертификат никогда не протухнет сам по себе.
+
+Скрипт идемпотентен — его можно спокойно перезапускать (например, если что-то
+не задалось на середине, или чтобы сменить домен). Для обкатки без риска
+упереться в лимиты Let's Encrypt есть флаг `--staging` (тестовый сертификат,
+браузер будет ругаться, зато лимиты не расходуются):
+
+```bash
+./deploy/setup-ssl.sh intercode.example.com you@example.com --staging
+```
+
+Проверить, что всё встало:
+
+```bash
+curl -I https://intercode.example.com/api/healthz
+crontab -l                                     # задача автопродления
+docker compose run --rm certbot certificates   # срок действия сертификата
+```
+
+> Работает для сборки на VPS (`docker-compose.yml`, `build: .` — вариант из
+> «Быстрого старта»). Для варианта с готовыми образами GHCR
+> (`docker-compose.ghcr.yml`) `deploy/nginx.conf` уже вшит в опубликованный
+> образ `web` — под HTTPS для него либо соберите `web` локально по
+> `docker-compose.yml`, либо подготовьте свой образ поверх `nginx:1.27-alpine`
+> с уже сгенерированным конфигом.
+
+### Вручную (для справки/кастомизации)
+
+Если нужно больше контроля, чем даёт скрипт — тот же процесс руками:
+
+```bash
+# 1. Домен указывает на VPS, порт 80 открыт.
 docker compose up -d --build
 
-# 2. Выпустить сертификат certbot'ом (webroot через запущенный nginx):
-sudo apt install certbot
-sudo certbot certonly --webroot -w /var/www/html -d intercode.example.com
-#    либо временно остановить web и использовать --standalone:
-#    docker compose stop web && sudo certbot certonly --standalone -d intercode.example.com
+# 2. Выпустить сертификат (web продолжает работать, challenge отдаёт nginx).
+#    Сервис certbot уже описан в docker-compose.yml (profiles: [tools]),
+#    поэтому его не нужно поднимать через `up` — только через `run`.
+docker compose run --rm certbot certonly --webroot -w /var/www/certbot \
+  -d intercode.example.com --agree-tos -m you@example.com --non-interactive
 
-# 3. В deploy/nginx.conf:
-#    - раскомментируйте HTTPS-блок, впишите домен;
-#    - HTTP-блок замените на редирект 301 (шаблон в комментарии файла).
+# 3. Сгенерировать deploy/nginx.conf из шаблона (или отредактировать вручную —
+#    структура блоков описана в deploy/nginx.ssl.conf.template). Плейсхолдер —
+#    только ${DOMAIN}, остальные $-переменные — это переменные nginx.
+DOMAIN=intercode.example.com
+template="$(cat deploy/nginx.ssl.conf.template)"
+printf '%s\n' "${template//\$\{DOMAIN\}/$DOMAIN}" > deploy/nginx.conf
 
-# 4. В docker-compose.yml:
-#    - раскомментируйте порт "443:443";
-#    - раскомментируйте volume /etc/letsencrypt (ro).
+# 4. В docker-compose.yml раскомментировать порт "443:443".
 
-# 5. Пересобрать web (конфиг nginx вшивается в образ):
+# 5. Пересобрать web (конфиг nginx вшивается в образ на этапе сборки).
 docker compose up -d --build web
 ```
 
-Certbot обновляет сертификаты сам (`certbot renew` по cron/systemd-таймеру);
-после обновления перезагрузите nginx: `docker compose exec web nginx -s reload`.
+Продление сертификата (действует 90 дней; Let's Encrypt рекомендует проверять
+дважды в день — `renew` сам ничего не делает, пока рано) и перечитывание
+конфига nginx без даунтайма:
+
+```bash
+docker compose run --rm certbot renew --webroot -w /var/www/certbot --quiet
+docker compose exec -T web nginx -s reload
+```
+
+Именно эти две команды `./deploy/setup-ssl.sh` кладёт в `crontab` автоматически.
 
 ## Данные и бэкап
 
@@ -88,6 +148,22 @@ docker run --rm -v intercode_server-data:/data -v "$PWD":/backup alpine \
 ```
 
 Восстановление — распаковать архив обратно в volume.
+
+## Автоматическая очистка сессий
+
+Сервер сам следит за жизненным циклом сессий, без внешнего крона:
+
+- **Простой > 1 часа.** Если в комнате час никого нет, она выгружается из RAM
+  и автоматически помечается завершённой (`status: "ended"`, выставляется `closedAt`)
+  — даже если интервьюер не нажимал «Завершить» явно.
+- **12 часов после завершения.** Раз в 30 минут сервер сканирует все сохранённые
+  сессии и безвозвратно удаляет файлы (`sessions/<id>.json`, `docs/<id>.bin`,
+  `telemetry/<id>.jsonl`) тех, что завершены (вручную или по простою) более 12
+  часов назад. Активные сессии никогда не трогаются — только завершённые.
+
+Если нужно хранить данные дольше (например, для архива собеседований), делайте
+резервную копию `server-data` до истечения 12 часов после завершения сессии —
+это единственный механизм долговременного хранения, автоочистку он не отменяет.
 
 ## Обновление до новой версии
 
