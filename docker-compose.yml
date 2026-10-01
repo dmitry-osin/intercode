@@ -17,6 +17,7 @@ services:
     environment:
       PORT: 8090
       DATA_DIR: /app/data
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     volumes:
       - server-data:/app/data
     # Наружу не публикуется — доступ только через nginx (web).

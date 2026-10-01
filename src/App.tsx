@@ -1,4 +1,6 @@
 import { Route, Router, Switch } from "wouter";
+import { lazy, Suspense, useEffect } from "react";
+import { recordVisit } from "@/analytics/visit";
 import { I18nProvider, useI18n } from "@/app/i18n";
 import { useIntercodeHashLocation } from "@/app/router";
 import { ThemeProvider } from "@/app/theme";
@@ -10,7 +12,10 @@ import LobbyPage from "@/pages/LobbyPage";
 import SessionPage from "@/pages/SessionPage";
 import { RoleGuard } from "@/ui/RoleGuard";
 
+const AdminPage = lazy(() => import("@/pages/AdminPage"));
+
 export default function App() {
+  useEffect(recordVisit, []);
   return (
     <I18nProvider>
       <ThemeProvider>
@@ -18,6 +23,7 @@ export default function App() {
           <Switch>
             <Route path="/" component={HomePage} />
             <Route path="/about" component={AboutPage} />
+            <Route path="/admin"><Suspense fallback={<div role="status" className="p-8">…</div>}><AdminPage /></Suspense></Route>
             <Route path="/lobby/:id">{(params) => <LobbyPage id={params.id} />}</Route>
             <Route path="/s/:id">{(params) => <SessionPage id={params.id} />}</Route>
             <Route path="/export/:id">{(params) => <ExportPage id={params.id} />}</Route>

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { WebSocketServer } from "ws";
 import { SessionStore } from "./store.js";
 import { RoomManager } from "./rooms.js";
+import { AdminAuth } from "./admin-auth.js";
 import {
   newSessionId,
   newToken,
@@ -17,6 +18,7 @@ const DATA_DIR = process.env.DATA_DIR ?? path.resolve(process.cwd(), "data");
 const STATIC_DIR = process.env.STATIC_DIR ? path.resolve(process.env.STATIC_DIR) : null;
 const MAX_BODY_BYTES = 1024 * 1024; // 1 МБ
 const MAX_INITIAL_CODE = 200 * 1024;
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 
 const LANGUAGES = new Set([
   "typescript",
@@ -33,6 +35,7 @@ const LANGUAGES = new Set([
 
 const store = new SessionStore(DATA_DIR);
 const manager = new RoomManager(store);
+const adminAuth = new AdminAuth(DATA_DIR, ADMIN_TOKEN);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -41,7 +44,7 @@ const manager = new RoomManager(store);
 function setCommonHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
   res.setHeader("X-Content-Type-Options", "nosniff");
 }
 
@@ -94,6 +97,54 @@ async function handleApi(req, res, url) {
   // GET /api/healthz — фронтенд использует как пробу server-режима.
   if (req.method === "GET" && url.pathname === "/api/healthz") {
     sendJson(res, 200, { ok: true, service: "intercode-server", time: Date.now() });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/analytics/visit") {
+    req.resume();
+    await store.analytics.visit();
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/admin/")) {
+    res.setHeader("Cache-Control", "no-store");
+    if (!adminAuth.enabled) {
+      sendJson(res, 503, { error: "admin_disabled" });
+      return;
+    }
+    if (!await adminAuth.authorize(req.headers.authorization)) {
+      sendJson(res, 401, { error: "unauthorized" });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/key") {
+      let body;
+      try {
+        body = await readBody(req);
+        if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("bad_body");
+      } catch {
+        sendJson(res, 400, { error: "bad_body" });
+        return;
+      }
+      const result = await adminAuth.rotate(req.headers.authorization, body.currentToken, body.newToken);
+      if (result !== "ok") {
+        sendJson(res, result === "unauthorized" ? 401 : 400, { error: result });
+        return;
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (req.method === "GET" && url.pathname === "/api/admin/stats") {
+      const days = Number(url.searchParams.get("days") ?? 30);
+      if (![7, 30, 90].includes(days)) {
+        sendJson(res, 400, { error: "bad_period" });
+        return;
+      }
+      sendJson(res, 200, await store.analytics.snapshot(days, manager.rooms));
+      return;
+    }
+    sendJson(res, 404, { error: "not_found" });
     return;
   }
 
@@ -393,6 +444,9 @@ async function shutdown() {
   console.log("[intercode] shutting down…");
   clearInterval(pingTimer);
   await manager.shutdown();
+  await Promise.allSettled([...store._writeQueues.values()]);
+  await store.analytics.queue.catch((error) => console.error("[analytics] shutdown:", error));
+  await adminAuth.queue.catch((error) => console.error("[admin] shutdown:", error));
   server.close();
   process.exit(0);
 }
@@ -400,11 +454,12 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 await store.init();
+await adminAuth.init();
 // Разовый прогон очистки сразу после старта — подчищаем то, что накопилось,
 // пока сервер не работал (дальше — по таймеру, см. RoomManager.purgeExpiredSessions).
 void manager.purgeExpiredSessions();
 server.listen(PORT, () => {
-  console.log(`[intercode] server listening on :${PORT}`);
+  console.log(`[intercode] server listening on :${server.address().port}`);
   console.log(`[intercode] data dir: ${DATA_DIR}`);
   if (STATIC_DIR) console.log(`[intercode] static dir: ${STATIC_DIR}`);
 });

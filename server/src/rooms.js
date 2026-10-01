@@ -129,6 +129,10 @@ export class Room {
     const conn = { clientId, role, name, alive: true, local: true };
     this.conns.set(ws, conn);
     this.idleSince = null;
+    if (role === "interviewee" && !this.meta.startedAt) {
+      this.meta.startedAt = Date.now();
+      void this.store.saveSessionMeta(this.meta).catch((error) => console.error("[analytics] start:", error));
+    }
 
     // Yjs sync step 1 + текущие awareness-состояния (handshake по y-protocols).
     {

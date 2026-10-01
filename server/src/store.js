@@ -1,5 +1,6 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { AnalyticsStore } from "./analytics.js";
 
 /**
  * Персистентность без внешней БД (§9 ТЗ): JSON-сессии, бинарные снапшоты
@@ -17,12 +18,14 @@ export class SessionStore {
     this.docsDir = path.join(dataDir, "docs");
     this.telemetryDir = path.join(dataDir, "telemetry");
     this._writeQueues = new Map(); // сериализация записей в один файл
+    this.analytics = new AnalyticsStore(dataDir);
   }
 
   async init() {
     await mkdir(this.sessionsDir, { recursive: true });
     await mkdir(this.docsDir, { recursive: true });
     await mkdir(this.telemetryDir, { recursive: true });
+    await this.analytics.init();
   }
 
   _sessionPath(id) {
@@ -53,9 +56,12 @@ export class SessionStore {
   }
 
   async saveSessionMeta(meta) {
-    return this._enqueue(`meta:${meta.id}`, () =>
-      this._atomicWrite(this._sessionPath(meta.id), JSON.stringify(meta, null, 2)),
-    );
+    const snapshot = structuredClone(meta);
+    return this._enqueue(`meta:${meta.id}`, async () => {
+      const previous = await this.loadSessionMeta(snapshot.id);
+      await this._atomicWrite(this._sessionPath(snapshot.id), JSON.stringify(snapshot, null, 2));
+      await this.analytics.session(snapshot, previous).catch((error) => console.error("[analytics] session:", error));
+    });
   }
 
   async loadSessionMeta(id) {
@@ -102,6 +108,7 @@ export class SessionStore {
         /* файла ещё нет */
       }
       await this._atomicWrite(file, prev + lines);
+      await this.analytics.events(events).catch((error) => console.error("[analytics] telemetry:", error));
     });
   }
 
