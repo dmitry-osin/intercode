@@ -5,3 +5,4 @@
 Dockerfile text eol=lf
 deploy/*.conf text eol=lf
 deploy/*.conf.template text eol=lf
+Dockerfile.vps text eol=lf

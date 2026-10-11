@@ -6,4 +6,4 @@ server/data
 .gitignore
 *.log
 docker-compose.yml
-Dockerfile
+Dockerfile.vps

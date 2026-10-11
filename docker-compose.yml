@@ -25,7 +25,9 @@ services:
       - "8090"
 
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.vps
     restart: unless-stopped
     ports:
       - "80:80"

@@ -71,3 +71,7 @@ export default defineConfig([
   },
 ])
 ```
+
+## Railway
+
+See [Railway / Railpack deployment](deploy/railway.md) for a single service hosting the frontend, API and WebSocket.

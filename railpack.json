@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "packages": {
+    "node": "22"
+  },
+  "steps": {
+    "install": {
+      "commands": [
+        "npm ci --include=dev --no-audit --no-fund",
+        "npm ci --prefix server --omit=dev --no-audit --no-fund"
+      ],
+      "inputs": [
+        {
+          "step": "packages:mise"
+        },
+        {
+          "local": true,
+          "include": [
+            "package.json",
+            "package-lock.json",
+            "server/package.json",
+            "server/package-lock.json"
+          ]
+        }
+      ]
+    },
+    "build": {
+      "commands": [
+        "npm run build"
+      ]
+    }
+  },
+  "deploy": {
+    "startCommand": "node server/src/index.js",
+    "variables": {
+      "NODE_ENV": "production",
+      "STATIC_DIR": "/app/dist",
+      "DATA_DIR": "/data"
+    }
+  }
+}
