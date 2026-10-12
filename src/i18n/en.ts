@@ -1,9 +1,10 @@
+import { appName } from "@/app/config";
 import type { Dictionary } from "./ru";
 
 /** Английская локаль — полный зеркальный набор ключей ru.ts. */
 export const en: Dictionary = {
   // Common
-  "app.brand": "IntQst",
+  "app.brand": appName,
   "app.tagline": "live coding interviews",
   "common.copy": "Copy",
   "common.copied": "Copied",

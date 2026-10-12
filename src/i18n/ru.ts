@@ -1,9 +1,11 @@
+import { appName } from "@/app/config";
+
 export type Locale = "ru" | "en";
 
 /** Русская локаль — также служит источником типа Dictionary. */
 export const ru = {
   // Общее
-  "app.brand": "IntQst",
+  "app.brand": appName,
   "app.tagline": "live-собеседования по коду",
   "common.copy": "Копировать",
   "common.copied": "Скопировано",

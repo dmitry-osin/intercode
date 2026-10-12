@@ -11,6 +11,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+ARG VITE_APP_NAME=IntQst
 RUN npm run build
 
 FROM nginx:1.27-alpine

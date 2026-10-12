@@ -9,6 +9,11 @@ Set `PORT=8090`, `DATA_DIR=/data`, `STATIC_DIR=/app/dist`, `NODE_ENV=production`
 Attach a persistent volume at `/data`, use `/api/healthz` as the deployment
 healthcheck, keep one replica and disable sleep. The server serves the frontend,
 API and WebSocket from one origin; leave `VITE_API_BASE` and `VITE_WS_BASE` unset.
+Optionally add `VITE_APP_NAME=MyInterview` to the Railway service's Variables to
+customize the name in the page header and browser tab title (default: `IntQst`). This frontend setting
+is read at build time; rebuild/redeploy after changes. The build step explicitly
+includes `VITE_APP_NAME` in its cache dependencies, preserving Railpack's generated
+defaults, as described in the [Railpack documentation](https://railpack.com/architecture/secrets).
 Restore `sessions/`, `docs/` and `telemetry/` before starting a migrated deployment.
 
 The parent `myserver-stack` repository provides Railway IaC and the public gateway

@@ -75,3 +75,18 @@ export default defineConfig([
 ## Railway
 
 See [Railway / Railpack deployment](deploy/railway.md) for a single service hosting the frontend, API and WebSocket.
+
+## Frontend name
+
+Set `VITE_APP_NAME` in `.env.local` (or the build environment) to change the name
+shown in the page header for every interface language and in the browser tab title. For example:
+
+```dotenv
+VITE_APP_NAME=MyInterview
+```
+
+The default is `IntQst` when the value is unset, empty, or only whitespace.
+Restart the dev server after changing it, or rebuild the frontend for production.
+Docker Compose reads it from `.env` and passes it to the web build. For a direct
+Docker build, use `--build-arg VITE_APP_NAME=MyInterview`. GHCR builds use the
+GitHub Actions repository variable `VITE_APP_NAME`; rebuild the image after changing it.

@@ -75,14 +75,14 @@ export async function loadLanguage(language: string): Promise<Extension> {
 }
 
 export const starterCode: Record<LanguageId, string> = {
-  typescript: `function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {\n  // TODO: реализуйте debounce\n  return fn;\n}\n`,
-  javascript: `function debounce(fn, ms) {\n  // TODO: реализуйте debounce\n  return fn;\n}\n`,
-  python: `def debounce(fn, ms):\n    # TODO: реализуйте debounce\n    return fn\n`,
-  java: `class Solution {\n    // TODO: реализуйте debounce\n}\n`,
-  go: `package main\n\n// TODO: реализуйте debounce\n`,
-  rust: `fn debounce() {\n    // TODO: реализуйте debounce\n}\n`,
-  cpp: `#include <functional>\n\n// TODO: реализуйте debounce\n`,
-  csharp: `public class Solution {\n    // TODO: реализуйте debounce\n}\n`,
-  sql: `-- TODO: напишите запрос\nSELECT 1;\n`,
-  kotlin: `class Solution {\n    // TODO: реализуйте debounce\n}\n`,
+  typescript: `function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T {\n  // TODO: implement debounce\n  return fn;\n}\n`,
+  javascript: `function debounce(fn, ms) {\n  // TODO: implement debounce\n  return fn;\n}\n`,
+  python: `def debounce(fn, ms):\n    # TODO: implement debounce\n    return fn\n`,
+  java: `class Solution {\n    // TODO: implement debounce\n}\n`,
+  go: `package main\n\n// TODO: implement debounce\n`,
+  rust: `fn debounce() {\n    // TODO: implement debounce\n}\n`,
+  cpp: `#include <functional>\n\n// TODO: implement debounce\n`,
+  csharp: `public class Solution {\n    // TODO: implement debounce\n}\n`,
+  sql: `-- TODO: write a query\nSELECT 1;\n`,
+  kotlin: `class Solution {\n    // TODO: implement debounce\n}\n`,
 };

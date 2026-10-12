@@ -25,6 +25,7 @@
       ]
     },
     "build": {
+      "secrets": ["...", "VITE_APP_NAME"],
       "commands": [
         "npm run build"
       ]

@@ -28,6 +28,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.vps
+      args:
+        VITE_APP_NAME: ${VITE_APP_NAME:-IntQst}
     restart: unless-stopped
     ports:
       - "80:80"
